@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 
 function createWindow(): void {
@@ -18,6 +18,9 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  ipcMain.on('window:minimize', () => mainWindow.minimize())
+  ipcMain.on('window:close', () => mainWindow.hide())
 }
 
 app.whenReady().then(createWindow)
