@@ -1,5 +1,12 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import {
+  connectDrive,
+  disconnectDrive,
+  getDriveSpace,
+  isDriveConnected,
+  openExplorer
+} from './webdav-manager'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -22,6 +29,26 @@ function createWindow(): void {
   ipcMain.on('window:minimize', () => mainWindow.minimize())
   ipcMain.on('window:close', () => mainWindow.hide())
 }
+
+ipcMain.handle('webdav:connect', async (_e, opts) => {
+  await connectDrive(opts)
+})
+
+ipcMain.handle('webdav:disconnect', async (_e, driveLetter: string) => {
+  await disconnectDrive(driveLetter)
+})
+
+ipcMain.handle('webdav:space', async (_e, driveLetter: string) => {
+  return getDriveSpace(driveLetter)
+})
+
+ipcMain.handle('webdav:isConnected', async (_e, driveLetter: string) => {
+  return isDriveConnected(driveLetter)
+})
+
+ipcMain.on('webdav:openExplorer', (_e, driveLetter: string) => {
+  openExplorer(driveLetter)
+})
 
 app.whenReady().then(createWindow)
 app.on('window-all-closed', () => app.quit())
