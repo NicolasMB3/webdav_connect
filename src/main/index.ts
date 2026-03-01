@@ -7,6 +7,7 @@ import {
   isDriveConnected,
   openExplorer
 } from './webdav-manager'
+import { saveCredentials, loadCredentials, clearCredentials } from './store'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -48,6 +49,18 @@ ipcMain.handle('webdav:isConnected', async (_e, driveLetter: string) => {
 
 ipcMain.on('webdav:openExplorer', (_e, driveLetter: string) => {
   openExplorer(driveLetter)
+})
+
+ipcMain.handle('store:save', async (_e, config) => {
+  saveCredentials(config)
+})
+
+ipcMain.handle('store:load', async () => {
+  return loadCredentials()
+})
+
+ipcMain.handle('store:clear', async () => {
+  clearCredentials()
 })
 
 app.whenReady().then(createWindow)

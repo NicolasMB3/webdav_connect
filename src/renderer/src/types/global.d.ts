@@ -15,5 +15,22 @@ interface Window {
       isConnected: (driveLetter: string) => Promise<boolean>
       openExplorer: (driveLetter: string) => void
     }
+    store: {
+      save: (config: {
+        url: string
+        driveLetter: string
+        username: string
+        password: string
+        autoConnect: boolean
+      }) => Promise<void>
+      load: () => Promise<{
+        url: string
+        driveLetter: string
+        username: string
+        password: string
+        autoConnect: boolean
+      } | null>
+      clear: () => Promise<void>
+    }
   }
 }

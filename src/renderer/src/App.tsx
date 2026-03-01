@@ -26,6 +26,15 @@ function App(): JSX.Element {
     }
   }, [])
 
+  // On mount: load saved config
+  useEffect(() => {
+    window.api.store.load().then(saved => {
+      if (saved) {
+        setDriveLetter(saved.driveLetter)
+      }
+    })
+  }, [])
+
   // On mount: check if drive is already connected
   useEffect(() => {
     let cancelled = false
@@ -55,6 +64,8 @@ function App(): JSX.Element {
     driveLetter: string
     username: string
     password: string
+    remember: boolean
+    autoConnect: boolean
   }) => {
     setShowLogin(false)
     setError(null)
@@ -70,6 +81,16 @@ function App(): JSX.Element {
       })
       setStatus('connected')
       refreshSpace(data.driveLetter)
+
+      if (data.remember) {
+        await window.api.store.save({
+          url: data.url,
+          driveLetter: data.driveLetter,
+          username: data.username,
+          password: data.password,
+          autoConnect: data.autoConnect
+        })
+      }
     } catch (err) {
       setStatus('disconnected')
       setError(err instanceof Error ? err.message : 'Echec de la connexion')

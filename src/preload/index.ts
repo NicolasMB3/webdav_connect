@@ -11,5 +11,11 @@ contextBridge.exposeInMainWorld('api', {
     getSpace: (driveLetter: string) => ipcRenderer.invoke('webdav:space', driveLetter),
     isConnected: (driveLetter: string) => ipcRenderer.invoke('webdav:isConnected', driveLetter),
     openExplorer: (driveLetter: string) => ipcRenderer.send('webdav:openExplorer', driveLetter)
+  },
+  store: {
+    save: (config: { url: string; driveLetter: string; username: string; password: string; autoConnect: boolean }) =>
+      ipcRenderer.invoke('store:save', config),
+    load: () => ipcRenderer.invoke('store:load'),
+    clear: () => ipcRenderer.invoke('store:clear')
   }
 })
