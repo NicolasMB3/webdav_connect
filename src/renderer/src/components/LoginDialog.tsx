@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import './LoginDialog.css'
 
 interface LoginDialogProps {
@@ -10,7 +10,7 @@ interface LoginDialogProps {
 
 const DRIVE_LETTERS = 'DEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(l => l + ':')
 
-export default function LoginDialog({ defaultUrl, defaultDriveLetter, onSubmit, onCancel }: LoginDialogProps): JSX.Element {
+export default function LoginDialog({ defaultUrl, defaultDriveLetter, onSubmit, onCancel }: LoginDialogProps): React.JSX.Element {
   const [url, setUrl] = useState(defaultUrl)
   const [driveLetter, setDriveLetter] = useState(defaultDriveLetter)
   const [username, setUsername] = useState('')

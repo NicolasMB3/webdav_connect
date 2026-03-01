@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Titlebar from './components/Titlebar'
 import DriveCard, { DriveStatus } from './components/DriveCard'
 import LoginDialog from './components/LoginDialog'
@@ -7,7 +7,7 @@ import Settings from './components/Settings'
 const DEFAULT_URL = 'https://stockage.cmc-06.fr:5006/backup'
 const DEFAULT_DRIVE = 'V:'
 
-function App(): JSX.Element {
+function App(): React.JSX.Element {
   const [view, setView] = useState<'main' | 'settings'>('main')
   const [status, setStatus] = useState<DriveStatus>('disconnected')
   const [showLogin, setShowLogin] = useState(false)

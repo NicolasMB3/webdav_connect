@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import './Settings.css'
 
 interface SettingsProps {
   onBack: () => void
 }
 
-export default function Settings({ onBack }: SettingsProps): JSX.Element {
+export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [autoStart, setAutoStart] = useState(false)
 
   useEffect(() => {

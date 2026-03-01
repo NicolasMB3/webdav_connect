@@ -1,10 +1,11 @@
+import React from 'react'
 import './Titlebar.css'
 
 interface TitlebarProps {
   onSettingsClick: () => void
 }
 
-export default function Titlebar({ onSettingsClick }: TitlebarProps): JSX.Element {
+export default function Titlebar({ onSettingsClick }: TitlebarProps): React.JSX.Element {
   return (
     <div className="titlebar">
       <div className="titlebar-drag">

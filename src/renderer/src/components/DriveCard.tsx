@@ -1,3 +1,4 @@
+import React from 'react'
 import './DriveCard.css'
 
 export type DriveStatus = 'connected' | 'disconnected' | 'connecting' | 'disconnecting'
@@ -21,7 +22,7 @@ function formatSize(bytes: number): string {
   return (bytes / 1e3).toFixed(2) + ' KB'
 }
 
-export default function DriveCard(props: DriveCardProps): JSX.Element {
+export default function DriveCard(props: DriveCardProps): React.JSX.Element {
   const { name, url, driveLetter, status, usedBytes, totalBytes, onConnect, onDisconnect, onOpenExplorer } = props
   const isConnected = status === 'connected'
   const isBusy = status === 'connecting' || status === 'disconnecting'
