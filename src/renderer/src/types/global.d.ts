@@ -32,5 +32,6 @@ interface Window {
       } | null>
       clear: () => Promise<void>
     }
+    onStatusChanged: (callback: (status: string) => void) => void
   }
 }

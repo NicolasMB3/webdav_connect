@@ -7,7 +7,7 @@ import {
   isDriveConnected,
   openExplorer
 } from './webdav-manager'
-import { saveCredentials, loadCredentials, clearCredentials } from './store'
+import { saveCredentials, loadCredentials, clearCredentials, getAutoConnect } from './store'
 import { createTray } from './tray'
 
 let mainWindow: BrowserWindow
@@ -92,6 +92,25 @@ if (!gotLock) {
   app.whenReady().then(() => {
     const win = createWindow()
     createTray(win, 'V:')
+
+    // Auto-connect on startup if enabled
+    if (getAutoConnect()) {
+      const creds = loadCredentials()
+      if (creds && !isDriveConnected(creds.driveLetter)) {
+        connectDrive({
+          url: creds.url,
+          driveLetter: creds.driveLetter,
+          username: creds.username,
+          password: creds.password
+        })
+          .then(() => {
+            win.webContents.send('webdav:statusChanged', 'connected')
+          })
+          .catch(() => {
+            // Silent fail on auto-connect, user can connect manually
+          })
+      }
+    }
   })
 }
 

@@ -52,6 +52,16 @@ function App(): JSX.Element {
     return () => { cancelled = true }
   }, [driveLetter, refreshSpace])
 
+  // Listen for status changes from main process (e.g. auto-connect)
+  useEffect(() => {
+    window.api.onStatusChanged((newStatus) => {
+      if (newStatus === 'connected') {
+        setStatus('connected')
+        refreshSpace(driveLetter)
+      }
+    })
+  }, [driveLetter, refreshSpace])
+
   // Periodic space refresh every 30s when connected
   useEffect(() => {
     if (status !== 'connected') return

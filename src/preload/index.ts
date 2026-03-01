@@ -17,5 +17,8 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('store:save', config),
     load: () => ipcRenderer.invoke('store:load'),
     clear: () => ipcRenderer.invoke('store:clear')
+  },
+  onStatusChanged: (callback: (status: string) => void) => {
+    ipcRenderer.on('webdav:statusChanged', (_e, status) => callback(status))
   }
 })
