@@ -1,11 +1,102 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Titlebar from './components/Titlebar'
 import DriveCard, { DriveStatus } from './components/DriveCard'
 import LoginDialog from './components/LoginDialog'
 
+const DEFAULT_URL = 'https://stockage.cmc-06.fr:5006/backup'
+const DEFAULT_DRIVE = 'V:'
+
 function App(): JSX.Element {
   const [status, setStatus] = useState<DriveStatus>('disconnected')
   const [showLogin, setShowLogin] = useState(false)
+  const [driveLetter, setDriveLetter] = useState(DEFAULT_DRIVE)
+  const [usedBytes, setUsedBytes] = useState<number | null>(null)
+  const [totalBytes, setTotalBytes] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const refreshSpace = useCallback(async (drive: string) => {
+    try {
+      const space = await window.api.webdav.getSpace(drive)
+      if (space) {
+        setUsedBytes(space.usedBytes)
+        setTotalBytes(space.totalBytes)
+      }
+    } catch {
+      // Non-critical: space info unavailable
+    }
+  }, [])
+
+  // On mount: check if drive is already connected
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const connected = await window.api.webdav.isConnected(driveLetter)
+        if (!cancelled && connected) {
+          setStatus('connected')
+          refreshSpace(driveLetter)
+        }
+      } catch {
+        // Ignore check failures
+      }
+    })()
+    return () => { cancelled = true }
+  }, [driveLetter, refreshSpace])
+
+  // Periodic space refresh every 30s when connected
+  useEffect(() => {
+    if (status !== 'connected') return
+    const interval = setInterval(() => refreshSpace(driveLetter), 30_000)
+    return () => clearInterval(interval)
+  }, [status, driveLetter, refreshSpace])
+
+  const handleConnect = async (data: {
+    url: string
+    driveLetter: string
+    username: string
+    password: string
+  }) => {
+    setShowLogin(false)
+    setError(null)
+    setStatus('connecting')
+    setDriveLetter(data.driveLetter)
+
+    try {
+      await window.api.webdav.connect({
+        url: data.url,
+        driveLetter: data.driveLetter,
+        username: data.username,
+        password: data.password
+      })
+      setStatus('connected')
+      refreshSpace(data.driveLetter)
+    } catch (err) {
+      setStatus('disconnected')
+      setError(err instanceof Error ? err.message : 'Echec de la connexion')
+    }
+  }
+
+  const handleDisconnect = async () => {
+    setStatus('disconnecting')
+    setError(null)
+
+    try {
+      await window.api.webdav.disconnect(driveLetter)
+      setStatus('disconnected')
+      setUsedBytes(null)
+      setTotalBytes(null)
+    } catch (err) {
+      setStatus('connected')
+      setError(err instanceof Error ? err.message : 'Echec de la deconnexion')
+    }
+  }
+
+  const statusText =
+    status === 'connected'
+      ? '\u25CF Connecte'
+      : status === 'connecting'
+        ? '\u25CC Connexion...'
+        : '\u25CB Deconnecte'
 
   return (
     <div className="app">
@@ -14,31 +105,31 @@ function App(): JSX.Element {
         <DriveCard
           name="NAS CMC-06"
           url="stockage.cmc-06.fr:5006/backup"
-          driveLetter="V:"
+          driveLetter={driveLetter}
           status={status}
-          usedBytes={null}
-          totalBytes={null}
+          usedBytes={usedBytes}
+          totalBytes={totalBytes}
           onConnect={() => setShowLogin(true)}
-          onDisconnect={() => setStatus('disconnected')}
-          onOpenExplorer={() => {}}
+          onDisconnect={handleDisconnect}
+          onOpenExplorer={() => window.api.webdav.openExplorer(driveLetter)}
         />
+        {error && (
+          <div className="app-error">
+            <span>{error}</span>
+            <button onClick={() => setError(null)}>{'\u00D7'}</button>
+          </div>
+        )}
       </div>
       {showLogin && (
         <LoginDialog
-          defaultUrl="https://stockage.cmc-06.fr:5006/backup"
-          defaultDriveLetter="V:"
-          onSubmit={(data) => {
-            setShowLogin(false)
-            setStatus('connecting')
-            // Will wire to actual WebDAV connection in Task 6
-          }}
+          defaultUrl={DEFAULT_URL}
+          defaultDriveLetter={driveLetter}
+          onSubmit={handleConnect}
           onCancel={() => setShowLogin(false)}
         />
       )}
       <div className="app-footer">
-        <span className="footer-status">
-          {status === 'connected' ? '\u25CF Connecte' : '\u25CB Deconnecte'}
-        </span>
+        <span className="footer-status">{statusText}</span>
         <span className="footer-version">v1.0.0</span>
       </div>
     </div>
