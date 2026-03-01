@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import Titlebar from './components/Titlebar'
 import DriveCard, { DriveStatus } from './components/DriveCard'
 import LoginDialog from './components/LoginDialog'
+import Settings from './components/Settings'
 
 const DEFAULT_URL = 'https://stockage.cmc-06.fr:5006/backup'
 const DEFAULT_DRIVE = 'V:'
 
 function App(): JSX.Element {
+  const [view, setView] = useState<'main' | 'settings'>('main')
   const [status, setStatus] = useState<DriveStatus>('disconnected')
   const [showLogin, setShowLogin] = useState(false)
   const [driveLetter, setDriveLetter] = useState(DEFAULT_DRIVE)
@@ -131,24 +133,30 @@ function App(): JSX.Element {
 
   return (
     <div className="app">
-      <Titlebar onSettingsClick={() => {}} />
+      <Titlebar onSettingsClick={() => setView('settings')} />
       <div className="app-content">
-        <DriveCard
-          name="NAS CMC-06"
-          url="stockage.cmc-06.fr:5006/backup"
-          driveLetter={driveLetter}
-          status={status}
-          usedBytes={usedBytes}
-          totalBytes={totalBytes}
-          onConnect={() => setShowLogin(true)}
-          onDisconnect={handleDisconnect}
-          onOpenExplorer={() => window.api.webdav.openExplorer(driveLetter)}
-        />
-        {error && (
-          <div className="app-error">
-            <span>{error}</span>
-            <button onClick={() => setError(null)}>{'\u00D7'}</button>
-          </div>
+        {view === 'settings' ? (
+          <Settings onBack={() => setView('main')} />
+        ) : (
+          <>
+            <DriveCard
+              name="NAS CMC-06"
+              url="stockage.cmc-06.fr:5006/backup"
+              driveLetter={driveLetter}
+              status={status}
+              usedBytes={usedBytes}
+              totalBytes={totalBytes}
+              onConnect={() => setShowLogin(true)}
+              onDisconnect={handleDisconnect}
+              onOpenExplorer={() => window.api.webdav.openExplorer(driveLetter)}
+            />
+            {error && (
+              <div className="app-error">
+                <span>{error}</span>
+                <button onClick={() => setError(null)}>{'\u00D7'}</button>
+              </div>
+            )}
+          </>
         )}
       </div>
       {showLogin && (

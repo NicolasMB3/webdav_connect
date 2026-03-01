@@ -1,0 +1,23 @@
+.settings { padding: 0 20px 20px; }
+.settings-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding-top: 4px; }
+.settings-header h2 { font-size: 15px; font-weight: 600; color: #e8e8f0; }
+.settings-back {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid #3a3a52; border-radius: 6px; color: #888;
+  cursor: pointer; transition: all 0.15s;
+}
+.settings-back:hover { background: #333350; color: #fff; }
+.settings-section { margin-bottom: 20px; }
+.settings-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 10px; }
+.settings-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: #2a2a3e; border-radius: 8px; font-size: 13px; color: #ccc; cursor: pointer;
+}
+.settings-toggle input[type="checkbox"] { accent-color: #4a9eff; width: 16px; height: 16px; }
+.settings-danger-btn {
+  padding: 10px 16px; background: transparent; border: 1px solid #5a2a2a; border-radius: 8px;
+  color: #f87171; font-size: 13px; cursor: pointer; font-family: inherit; transition: all 0.15s;
+}
+.settings-danger-btn:hover { background: #3a1a1a; }
+.settings-about { padding: 10px 14px; background: #2a2a3e; border-radius: 8px; font-size: 13px; color: #ccc; }
+.settings-about-desc { color: #666; font-size: 12px; margin-top: 4px; }

@@ -77,6 +77,15 @@ ipcMain.handle('store:clear', async () => {
   clearCredentials()
 })
 
+// App IPC handlers
+ipcMain.handle('app:getAutoStart', () => {
+  return app.getLoginItemSettings().openAtLogin
+})
+
+ipcMain.handle('app:setAutoStart', (_e, enabled: boolean) => {
+  app.setLoginItemSettings({ openAtLogin: enabled })
+})
+
 // Single instance lock
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {

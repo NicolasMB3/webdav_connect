@@ -32,6 +32,10 @@ interface Window {
       } | null>
       clear: () => Promise<void>
     }
+    app: {
+      getAutoStart: () => Promise<boolean>
+      setAutoStart: (enabled: boolean) => Promise<void>
+    }
     onStatusChanged: (callback: (status: string) => void) => void
   }
 }

@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld('api', {
     load: () => ipcRenderer.invoke('store:load'),
     clear: () => ipcRenderer.invoke('store:clear')
   },
+  app: {
+    getAutoStart: () => ipcRenderer.invoke('app:getAutoStart'),
+    setAutoStart: (enabled: boolean) => ipcRenderer.invoke('app:setAutoStart', enabled)
+  },
   onStatusChanged: (callback: (status: string) => void) => {
     ipcRenderer.on('webdav:statusChanged', (_e, status) => callback(status))
   }
