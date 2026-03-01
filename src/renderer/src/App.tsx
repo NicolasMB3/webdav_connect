@@ -93,6 +93,7 @@ function App(): JSX.Element {
       })
       setStatus('connected')
       refreshSpace(data.driveLetter)
+      window.api.notify('CMC Drive', `NAS connecte sur ${data.driveLetter}`)
 
       if (data.remember) {
         await window.api.store.save({
@@ -116,6 +117,7 @@ function App(): JSX.Element {
     try {
       await window.api.webdav.disconnect(driveLetter)
       setStatus('disconnected')
+      window.api.notify('CMC Drive', 'NAS deconnecte')
       setUsedBytes(null)
       setTotalBytes(null)
     } catch (err) {

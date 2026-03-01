@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import { join } from 'path'
 import {
   connectDrive,
@@ -42,6 +42,11 @@ function createWindow(): BrowserWindow {
 // Window IPC handlers (use module-scope mainWindow)
 ipcMain.on('window:minimize', () => mainWindow.minimize())
 ipcMain.on('window:close', () => mainWindow.hide())
+
+// Notification IPC handler
+ipcMain.on('notify', (_e, { title, body }: { title: string; body: string }) => {
+  new Notification({ title, body }).show()
+})
 
 // WebDAV IPC handlers
 ipcMain.handle('webdav:connect', async (_e, opts) => {

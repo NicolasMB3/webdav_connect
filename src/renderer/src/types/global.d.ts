@@ -36,6 +36,7 @@ interface Window {
       getAutoStart: () => Promise<boolean>
       setAutoStart: (enabled: boolean) => Promise<void>
     }
+    notify: (title: string, body: string) => void
     onStatusChanged: (callback: (status: string) => void) => void
   }
 }
