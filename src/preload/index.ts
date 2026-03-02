@@ -48,6 +48,9 @@ contextBridge.exposeInMainWorld('api', {
     },
     onUpToDate: (cb: () => void) => {
       ipcRenderer.on('updater:upToDate', () => cb())
+    },
+    onError: (cb: (message: string) => void) => {
+      ipcRenderer.on('updater:error', (_e, message) => cb(message))
     }
   },
   notify: (title: string, body: string) => ipcRenderer.send('notify', { title, body }),

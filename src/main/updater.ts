@@ -40,6 +40,7 @@ export function setupAutoUpdater(getWindow: () => BrowserWindow | null): void {
 
   autoUpdater.on('error', (err) => {
     console.log('[updater] Error:', err.message)
+    sendToRenderer('updater:error', err.message)
   })
 
   // Initial check after 5s, then every 4 hours

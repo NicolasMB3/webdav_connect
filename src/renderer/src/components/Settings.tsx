@@ -7,11 +7,12 @@ interface SettingsProps {
 
 export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [autoStart, setAutoStart] = useState(false)
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'upToDate'>('idle')
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'upToDate' | 'error'>('idle')
 
   useEffect(() => {
     window.api.app.getAutoStart().then(setAutoStart)
     window.api.updater.onUpToDate(() => setUpdateStatus('upToDate'))
+    window.api.updater.onError(() => setUpdateStatus('error'))
   }, [])
 
   const handleAutoStartChange = async (checked: boolean): Promise<void> => {
@@ -59,14 +60,14 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
             window.api.updater.check()
           }}
         >
-          {updateStatus === 'checking' ? 'Vérification...' : updateStatus === 'upToDate' ? 'Vous êtes à jour ✓' : 'Vérifier les mises à jour'}
+          {updateStatus === 'checking' ? 'Vérification...' : updateStatus === 'upToDate' ? 'Vous êtes à jour ✓' : updateStatus === 'error' ? 'Erreur — Réessayer' : 'Vérifier les mises à jour'}
         </button>
       </div>
 
       <div className="settings-section">
         <h3>A propos</h3>
         <div className="settings-about">
-          <p><strong>CMC Drive</strong> v1.2.0</p>
+          <p><strong>CMC Drive</strong> v1.3.0</p>
           <p className="settings-about-desc">Client WebDAV pour NAS CMC-06</p>
         </div>
       </div>

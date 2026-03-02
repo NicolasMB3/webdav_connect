@@ -43,6 +43,7 @@ interface Window {
       onUpdateAvailable: (cb: (version: string) => void) => void
       onUpdateDownloaded: (cb: (version: string) => void) => void
       onUpToDate: (cb: () => void) => void
+      onError: (cb: (message: string) => void) => void
     }
     notify: (title: string, body: string) => void
     onStatusChanged: (callback: (serverId: string, status: string) => void) => void
