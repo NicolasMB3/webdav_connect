@@ -56,7 +56,8 @@
     "publish": {
       "provider": "github",
       "owner": "NicolasMB3",
-      "repo": "webdav_connect"
+      "repo": "webdav_connect",
+      "releaseType": "release"
     },
     "files": [
       "out/**/*",
