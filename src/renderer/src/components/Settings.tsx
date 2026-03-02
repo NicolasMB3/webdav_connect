@@ -7,11 +7,13 @@ interface SettingsProps {
 
 export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [autoStart, setAutoStart] = useState(false)
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'upToDate' | 'error'>('idle')
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'upToDate' | 'available' | 'downloaded' | 'error'>('idle')
 
   useEffect(() => {
     window.api.app.getAutoStart().then(setAutoStart)
     window.api.updater.onUpToDate(() => setUpdateStatus('upToDate'))
+    window.api.updater.onUpdateAvailable(() => setUpdateStatus('available'))
+    window.api.updater.onUpdateDownloaded(() => setUpdateStatus('downloaded'))
     window.api.updater.onError(() => setUpdateStatus('error'))
   }, [])
 
@@ -54,20 +56,29 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
         <h3>Mises à jour</h3>
         <button
           className="settings-update-btn"
-          disabled={updateStatus === 'checking'}
+          disabled={updateStatus === 'checking' || updateStatus === 'available'}
           onClick={() => {
-            setUpdateStatus('checking')
-            window.api.updater.check()
+            if (updateStatus === 'downloaded') {
+              window.api.updater.install()
+            } else {
+              setUpdateStatus('checking')
+              window.api.updater.check()
+            }
           }}
         >
-          {updateStatus === 'checking' ? 'Vérification...' : updateStatus === 'upToDate' ? 'Vous êtes à jour ✓' : updateStatus === 'error' ? 'Erreur — Réessayer' : 'Vérifier les mises à jour'}
+          {updateStatus === 'checking' ? 'Vérification...'
+            : updateStatus === 'available' ? 'Téléchargement en cours...'
+            : updateStatus === 'downloaded' ? 'Mise à jour prête — Redémarrer'
+            : updateStatus === 'upToDate' ? 'Vous êtes à jour ✓'
+            : updateStatus === 'error' ? 'Erreur — Réessayer'
+            : 'Vérifier les mises à jour'}
         </button>
       </div>
 
       <div className="settings-section">
         <h3>A propos</h3>
         <div className="settings-about">
-          <p><strong>CMC Drive</strong> v1.3.0</p>
+          <p><strong>CMC Drive</strong> v1.4.0</p>
           <p className="settings-about-desc">Client WebDAV pour NAS CMC-06</p>
         </div>
       </div>
