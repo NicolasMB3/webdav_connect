@@ -1,4 +1,5 @@
 import React from 'react'
+import logoImg from '../assets/logo.png'
 import './Titlebar.css'
 
 interface TitlebarProps {
@@ -10,10 +11,7 @@ export default function Titlebar({ onSettingsClick }: TitlebarProps): React.JSX.
     <div className="titlebar">
       <div className="titlebar-drag">
         <div className="titlebar-logo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4a9eff" strokeWidth="2">
-            <path d="M22 12H2M22 12L18 8M22 12L18 16M2 12L6 8M2 12L6 16" />
-            <circle cx="12" cy="12" r="3" fill="#4a9eff" stroke="none" />
-          </svg>
+          <img src={logoImg} alt="CMC Drive" width="20" height="20" />
           <span className="titlebar-title">CMC Drive</span>
         </div>
       </div>

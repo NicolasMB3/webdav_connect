@@ -37,6 +37,19 @@ contextBridge.exposeInMainWorld('api', {
     getAutoStart: () => ipcRenderer.invoke('app:getAutoStart'),
     setAutoStart: (enabled: boolean) => ipcRenderer.invoke('app:setAutoStart', enabled)
   },
+  updater: {
+    check: () => ipcRenderer.invoke('updater:check'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    onUpdateAvailable: (cb: (version: string) => void) => {
+      ipcRenderer.on('updater:updateAvailable', (_e, version) => cb(version))
+    },
+    onUpdateDownloaded: (cb: (version: string) => void) => {
+      ipcRenderer.on('updater:updateDownloaded', (_e, version) => cb(version))
+    },
+    onUpToDate: (cb: () => void) => {
+      ipcRenderer.on('updater:upToDate', () => cb())
+    }
+  },
   notify: (title: string, body: string) => ipcRenderer.send('notify', { title, body }),
   onStatusChanged: (callback: (serverId: string, status: string) => void) => {
     ipcRenderer.on('webdav:statusChanged', (_e, id, status) => callback(id, status))

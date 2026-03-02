@@ -19,7 +19,7 @@ import {
   resetSecurityCache
 } from './store'
 import { createTray } from './tray'
-import { setupAutoUpdater } from './updater'
+import { setupAutoUpdater, checkForUpdates, installUpdate } from './updater'
 
 function getIconPath(): string {
   if (app.isPackaged) {
@@ -42,6 +42,7 @@ function createWindow(): BrowserWindow {
     height: 600,
     frame: false,
     resizable: false,
+    icon: getIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -155,6 +156,15 @@ ipcMain.handle('store:clearAll', async () => {
   resetSecurityCache()
 })
 
+// Updater IPC handlers
+ipcMain.handle('updater:check', () => {
+  checkForUpdates()
+})
+
+ipcMain.handle('updater:install', () => {
+  installUpdate()
+})
+
 // App IPC handlers
 ipcMain.handle('app:getAutoStart', () => {
   return app.getLoginItemSettings().openAtLogin
@@ -223,7 +233,7 @@ if (!gotLock) {
     })
 
     // F1: Setup auto-updater (checks after 5s, then every 4h)
-    setupAutoUpdater()
+    setupAutoUpdater(() => mainWindow)
 
     // F2: Reconnect drives after PC wakes from sleep/hibernate
     powerMonitor.on('resume', () => {

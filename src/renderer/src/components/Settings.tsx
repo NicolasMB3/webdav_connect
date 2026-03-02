@@ -7,9 +7,11 @@ interface SettingsProps {
 
 export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [autoStart, setAutoStart] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'upToDate'>('idle')
 
   useEffect(() => {
     window.api.app.getAutoStart().then(setAutoStart)
+    window.api.updater.onUpToDate(() => setUpdateStatus('upToDate'))
   }, [])
 
   const handleAutoStartChange = async (checked: boolean): Promise<void> => {
@@ -48,9 +50,23 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
       </div>
 
       <div className="settings-section">
+        <h3>Mises à jour</h3>
+        <button
+          className="settings-update-btn"
+          disabled={updateStatus === 'checking'}
+          onClick={() => {
+            setUpdateStatus('checking')
+            window.api.updater.check()
+          }}
+        >
+          {updateStatus === 'checking' ? 'Vérification...' : updateStatus === 'upToDate' ? 'Vous êtes à jour ✓' : 'Vérifier les mises à jour'}
+        </button>
+      </div>
+
+      <div className="settings-section">
         <h3>A propos</h3>
         <div className="settings-about">
-          <p><strong>CMC Drive</strong> v1.0.0</p>
+          <p><strong>CMC Drive</strong> v1.2.0</p>
           <p className="settings-about-desc">Client WebDAV pour NAS CMC-06</p>
         </div>
       </div>

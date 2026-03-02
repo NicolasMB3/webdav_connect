@@ -21,6 +21,7 @@ function App(): React.JSX.Element {
   const [servers, setServers] = useState<ServerState[]>([])
   const [loginTarget, setLoginTarget] = useState<ServerConfig | null>(null)
   const [showLogin, setShowLogin] = useState(false)
+  const [updateReady, setUpdateReady] = useState<string | null>(null)
 
   const updateServer = useCallback((id: string, partial: Partial<ServerState>) => {
     setServers((prev) => prev.map((s) => (s.config.id === id ? { ...s, ...partial } : s)))
@@ -81,6 +82,13 @@ function App(): React.JSX.Element {
           })
           .catch(() => {})
       }
+    })
+  }, [])
+
+  // Listen for update events
+  useEffect(() => {
+    window.api.updater.onUpdateDownloaded((version) => {
+      setUpdateReady(version)
     })
   }, [])
 
@@ -249,6 +257,12 @@ function App(): React.JSX.Element {
   return (
     <div className="app">
       <Titlebar onSettingsClick={() => setView('settings')} />
+      {updateReady && (
+        <div className="update-banner">
+          <span>Mise à jour v{updateReady} prête</span>
+          <button onClick={() => window.api.updater.install()}>Installer et redémarrer</button>
+        </div>
+      )}
       <div className="app-content">
         {view === 'settings' ? (
           <Settings onBack={() => setView('main')} />
@@ -311,7 +325,7 @@ function App(): React.JSX.Element {
         <span className="footer-status">
           {connectedCount} / {servers.length} connecté(s)
         </span>
-        <span className="footer-version">v1.0.0</span>
+        <span className="footer-version">v1.2.0</span>
       </div>
     </div>
   )
