@@ -1,6 +1,6 @@
 {
   "name": "cmc-drive",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -37,8 +37,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.png",
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,

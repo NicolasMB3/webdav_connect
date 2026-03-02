@@ -78,7 +78,7 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
       <div className="settings-section">
         <h3>A propos</h3>
         <div className="settings-about">
-          <p><strong>CMC Drive</strong> v1.4.0</p>
+          <p><strong>CMC Drive</strong> v1.5.0</p>
           <p className="settings-about-desc">Client WebDAV pour NAS CMC-06</p>
         </div>
       </div>
