@@ -18,7 +18,7 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   }
 
   const handleClearCredentials = async (): Promise<void> => {
-    await window.api.store.clear()
+    await window.api.store.clearAll()
   }
 
   return (
@@ -29,21 +29,21 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
         </button>
-        <h2>Parametres</h2>
+        <h2>Paramètres</h2>
       </div>
 
       <div className="settings-section">
         <h3>Demarrage</h3>
         <label className="settings-toggle">
-          <span>Lancer CMC Drive au demarrage de Windows</span>
+          <span>Lancer CMC Drive au démarrage de Windows</span>
           <input type="checkbox" checked={autoStart} onChange={e => handleAutoStartChange(e.target.checked)} />
         </label>
       </div>
 
       <div className="settings-section">
-        <h3>Securite</h3>
+        <h3>Sécurité</h3>
         <button className="settings-danger-btn" onClick={handleClearCredentials}>
-          Supprimer les identifiants sauvegardes
+          Supprimer les identifiants sauvegardés
         </button>
       </div>
 

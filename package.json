@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.6.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -36,18 +37,24 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
       "shortcutName": "CMC Drive",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "NicolasMB3",
+      "repo": "webdav_connect"
     },
     "files": [
       "out/**/*",

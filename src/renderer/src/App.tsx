@@ -6,132 +6,245 @@ import Settings from './components/Settings'
 
 const DEFAULT_URL = 'https://stockage.cmc-06.fr:5006/backup'
 const DEFAULT_DRIVE = 'V:'
+const DEFAULT_NAME = 'NAS CMC-06'
+
+interface ServerState {
+  config: ServerConfig
+  status: DriveStatus
+  usedBytes: number | null
+  totalBytes: number | null
+  error: string | null
+}
 
 function App(): React.JSX.Element {
   const [view, setView] = useState<'main' | 'settings'>('main')
-  const [status, setStatus] = useState<DriveStatus>('disconnected')
+  const [servers, setServers] = useState<ServerState[]>([])
+  const [loginTarget, setLoginTarget] = useState<ServerConfig | null>(null)
   const [showLogin, setShowLogin] = useState(false)
-  const [driveLetter, setDriveLetter] = useState(DEFAULT_DRIVE)
-  const [usedBytes, setUsedBytes] = useState<number | null>(null)
-  const [totalBytes, setTotalBytes] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
-  const refreshSpace = useCallback(async (drive: string) => {
-    try {
-      const space = await window.api.webdav.getSpace(drive)
-      if (space) {
-        setUsedBytes(space.usedBytes)
-        setTotalBytes(space.totalBytes)
-      }
-    } catch {
-      // Non-critical: space info unavailable
-    }
+  const updateServer = useCallback((id: string, partial: Partial<ServerState>) => {
+    setServers((prev) => prev.map((s) => (s.config.id === id ? { ...s, ...partial } : s)))
   }, [])
 
-  // On mount: load saved config
+  const refreshSpace = useCallback(
+    async (id: string, driveLetter: string) => {
+      try {
+        const space = await window.api.webdav.getSpace(driveLetter)
+        if (space) {
+          updateServer(id, { usedBytes: space.usedBytes, totalBytes: space.totalBytes })
+        }
+      } catch {
+        // Non-critical
+      }
+    },
+    [updateServer]
+  )
+
+  // On mount: load all saved servers and check connection status
   useEffect(() => {
-    window.api.store.load().then(saved => {
-      if (saved) {
-        setDriveLetter(saved.driveLetter)
+    window.api.store.loadAll().then((configs) => {
+      const states: ServerState[] = configs.map((config) => ({
+        config,
+        status: 'disconnected' as DriveStatus,
+        usedBytes: null,
+        totalBytes: null,
+        error: null
+      }))
+      setServers(states)
+
+      // Check which drives are already connected
+      for (const config of configs) {
+        window.api.webdav
+          .isConnected(config.driveLetter)
+          .then((connected) => {
+            if (connected) {
+              setServers((prev) =>
+                prev.map((s) =>
+                  s.config.id === config.id ? { ...s, status: 'connected' } : s
+                )
+              )
+              window.api.webdav
+                .getSpace(config.driveLetter)
+                .then((space) => {
+                  if (space) {
+                    setServers((prev) =>
+                      prev.map((s) =>
+                        s.config.id === config.id
+                          ? { ...s, usedBytes: space.usedBytes, totalBytes: space.totalBytes }
+                          : s
+                      )
+                    )
+                  }
+                })
+                .catch(() => {})
+            }
+          })
+          .catch(() => {})
       }
     })
   }, [])
-
-  // On mount: check if drive is already connected
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const connected = await window.api.webdav.isConnected(driveLetter)
-        if (!cancelled && connected) {
-          setStatus('connected')
-          refreshSpace(driveLetter)
-        }
-      } catch {
-        // Ignore check failures
-      }
-    })()
-    return () => { cancelled = true }
-  }, [driveLetter, refreshSpace])
 
   // Listen for status changes from main process (e.g. auto-connect)
   useEffect(() => {
-    window.api.onStatusChanged((newStatus) => {
+    window.api.onStatusChanged((serverId, newStatus) => {
       if (newStatus === 'connected') {
-        setStatus('connected')
-        refreshSpace(driveLetter)
+        setServers((prev) => {
+          const server = prev.find((s) => s.config.id === serverId)
+          if (server) {
+            window.api.webdav
+              .getSpace(server.config.driveLetter)
+              .then((space) => {
+                if (space) {
+                  setServers((p) =>
+                    p.map((s) =>
+                      s.config.id === serverId
+                        ? { ...s, usedBytes: space.usedBytes, totalBytes: space.totalBytes }
+                        : s
+                    )
+                  )
+                }
+              })
+              .catch(() => {})
+          }
+          return prev.map((s) =>
+            s.config.id === serverId ? { ...s, status: 'connected' } : s
+          )
+        })
       }
     })
-  }, [driveLetter, refreshSpace])
+  }, [])
 
-  // Periodic space refresh every 30s when connected
+  // Periodic space refresh every 30s for all connected servers
   useEffect(() => {
-    if (status !== 'connected') return
-    const interval = setInterval(() => refreshSpace(driveLetter), 30_000)
+    const interval = setInterval(() => {
+      setServers((current) => {
+        current
+          .filter((s) => s.status === 'connected')
+          .forEach((s) => {
+            refreshSpace(s.config.id, s.config.driveLetter)
+          })
+        return current
+      })
+    }, 30_000)
     return () => clearInterval(interval)
-  }, [status, driveLetter, refreshSpace])
+  }, [refreshSpace])
 
   const handleConnect = async (data: {
+    id?: string
     url: string
     driveLetter: string
     username: string
     password: string
     remember: boolean
     autoConnect: boolean
-  }) => {
+    driveName: string
+  }): Promise<void> => {
     setShowLogin(false)
-    setError(null)
-    setStatus('connecting')
-    setDriveLetter(data.driveLetter)
+
+    const serverId = data.id || Date.now().toString()
+    const config: ServerConfig = {
+      id: serverId,
+      url: data.url,
+      driveLetter: data.driveLetter,
+      username: data.username,
+      password: data.password,
+      autoConnect: data.autoConnect,
+      driveName: data.driveName
+    }
+
+    // Add or update server in state
+    setServers((prev) => {
+      const exists = prev.find((s) => s.config.id === serverId)
+      if (exists) {
+        return prev.map((s) =>
+          s.config.id === serverId
+            ? { ...s, config, status: 'connecting' as DriveStatus, error: null }
+            : s
+        )
+      }
+      return [
+        ...prev,
+        {
+          config,
+          status: 'connecting' as DriveStatus,
+          usedBytes: null,
+          totalBytes: null,
+          error: null
+        }
+      ]
+    })
 
     try {
       await window.api.webdav.connect({
         url: data.url,
         driveLetter: data.driveLetter,
         username: data.username,
-        password: data.password
+        password: data.password,
+        driveName: data.driveName
       })
-      setStatus('connected')
-      refreshSpace(data.driveLetter)
-      window.api.notify('CMC Drive', `NAS connecte sur ${data.driveLetter}`)
+      updateServer(serverId, { status: 'connected', error: null })
+      refreshSpace(serverId, data.driveLetter)
+      window.api.notify('CMC Drive', `${data.driveName} connecté sur ${data.driveLetter}`)
 
       if (data.remember) {
-        await window.api.store.save({
-          url: data.url,
-          driveLetter: data.driveLetter,
-          username: data.username,
-          password: data.password,
-          autoConnect: data.autoConnect
-        })
+        await window.api.store.save(config)
       }
     } catch (err) {
-      setStatus('disconnected')
-      setError(err instanceof Error ? err.message : 'Echec de la connexion')
+      updateServer(serverId, {
+        status: 'disconnected',
+        error: err instanceof Error ? err.message : 'Échec de la connexion'
+      })
     }
   }
 
-  const handleDisconnect = async () => {
-    setStatus('disconnecting')
-    setError(null)
+  const handleDisconnect = async (id: string): Promise<void> => {
+    const server = servers.find((s) => s.config.id === id)
+    if (!server) return
+
+    updateServer(id, { status: 'disconnecting', error: null })
 
     try {
-      await window.api.webdav.disconnect(driveLetter)
-      setStatus('disconnected')
-      window.api.notify('CMC Drive', 'NAS deconnecte')
-      setUsedBytes(null)
-      setTotalBytes(null)
+      await window.api.webdav.disconnect(server.config.driveLetter)
+      updateServer(id, { status: 'disconnected', usedBytes: null, totalBytes: null })
+      window.api.notify('CMC Drive', `${server.config.driveName} déconnecté`)
     } catch (err) {
-      setStatus('connected')
-      setError(err instanceof Error ? err.message : 'Echec de la deconnexion')
+      updateServer(id, {
+        status: 'connected',
+        error: err instanceof Error ? err.message : 'Échec de la déconnexion'
+      })
     }
   }
 
-  const statusText =
-    status === 'connected'
-      ? '\u25CF Connecte'
-      : status === 'connecting'
-        ? '\u25CC Connexion...'
-        : '\u25CB Deconnecte'
+  const handleDelete = async (id: string): Promise<void> => {
+    const server = servers.find((s) => s.config.id === id)
+    if (!server) return
+
+    if (server.status === 'connected') {
+      try {
+        await window.api.webdav.disconnect(server.config.driveLetter)
+      } catch {
+        // Continue with deletion even if disconnect fails
+      }
+    }
+
+    await window.api.store.delete(id)
+    setServers((prev) => prev.filter((s) => s.config.id !== id))
+  }
+
+  const handleAdd = (): void => {
+    setLoginTarget(null)
+    setShowLogin(true)
+  }
+
+  const handleEdit = (id: string): void => {
+    const server = servers.find((s) => s.config.id === id)
+    if (server) {
+      setLoginTarget(server.config)
+      setShowLogin(true)
+    }
+  }
+
+  const connectedCount = servers.filter((s) => s.status === 'connected').length
 
   return (
     <div className="app">
@@ -141,36 +254,63 @@ function App(): React.JSX.Element {
           <Settings onBack={() => setView('main')} />
         ) : (
           <>
-            <DriveCard
-              name="NAS CMC-06"
-              url="stockage.cmc-06.fr:5006/backup"
-              driveLetter={driveLetter}
-              status={status}
-              usedBytes={usedBytes}
-              totalBytes={totalBytes}
-              onConnect={() => setShowLogin(true)}
-              onDisconnect={handleDisconnect}
-              onOpenExplorer={() => window.api.webdav.openExplorer(driveLetter)}
-            />
-            {error && (
-              <div className="app-error">
-                <span>{error}</span>
-                <button onClick={() => setError(null)}>{'\u00D7'}</button>
-              </div>
-            )}
+            {servers.map((server) => (
+              <React.Fragment key={server.config.id}>
+                <DriveCard
+                  name={server.config.driveName}
+                  url={server.config.url}
+                  driveLetter={server.config.driveLetter}
+                  status={server.status}
+                  usedBytes={server.usedBytes}
+                  totalBytes={server.totalBytes}
+                  onConnect={() => handleEdit(server.config.id)}
+                  onDisconnect={() => handleDisconnect(server.config.id)}
+                  onOpenExplorer={() =>
+                    window.api.webdav.openExplorer(server.config.driveLetter)
+                  }
+                  onDelete={() => handleDelete(server.config.id)}
+                  onRename={async (newName) => {
+                    const updatedConfig = { ...server.config, driveName: newName }
+                    updateServer(server.config.id, { config: updatedConfig })
+                    if (server.status === 'connected') {
+                      window.api.webdav
+                        .rename(server.config.driveLetter, newName)
+                        .catch(() => {})
+                    }
+                    await window.api.store.save(updatedConfig)
+                  }}
+                />
+                {server.error && (
+                  <div className="app-error">
+                    <span>{server.error}</span>
+                    <button onClick={() => updateServer(server.config.id, { error: null })}>
+                      {'\u00D7'}
+                    </button>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+            <button className="add-server-btn" onClick={handleAdd}>
+              + Ajouter un serveur
+            </button>
           </>
         )}
       </div>
       {showLogin && (
         <LoginDialog
+          server={loginTarget ?? undefined}
           defaultUrl={DEFAULT_URL}
-          defaultDriveLetter={driveLetter}
+          defaultDriveLetter={DEFAULT_DRIVE}
+          defaultDriveName={DEFAULT_NAME}
+          usedDriveLetters={servers.map((s) => s.config.driveLetter)}
           onSubmit={handleConnect}
           onCancel={() => setShowLogin(false)}
         />
       )}
       <div className="app-footer">
-        <span className="footer-status">{statusText}</span>
+        <span className="footer-status">
+          {connectedCount} / {servers.length} connecté(s)
+        </span>
         <span className="footer-version">v1.0.0</span>
       </div>
     </div>
