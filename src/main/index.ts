@@ -19,7 +19,7 @@ import {
   resetSecurityCache
 } from './store'
 import { createTray } from './tray'
-import { setupAutoUpdater, checkForUpdates, installUpdate } from './updater'
+import { setupAutoUpdater, checkForUpdates, installUpdate, replayUpdateState } from './updater'
 
 function getIconPath(): string {
   if (app.isPackaged) {
@@ -61,12 +61,13 @@ function createWindow(): BrowserWindow {
     win.hide()
   })
 
-  // Flush queued status changes once the renderer is ready
+  // Flush queued status changes + replay update state once the renderer is ready
   win.webContents.on('did-finish-load', () => {
     for (const [id, status] of pendingStatusChanges) {
       win.webContents.send('webdav:statusChanged', id, status)
     }
     pendingStatusChanges.length = 0
+    replayUpdateState(win)
   })
 
   return win
@@ -221,6 +222,9 @@ if (!gotLock) {
   })
 
   app.whenReady().then(async () => {
+    // Fix Windows taskbar icon: associate our custom icon with this AppUserModelId
+    app.setAppUserModelId('fr.cmc-06.cmc-drive')
+
     // Enable auto-start on first launch
     if (isFirstLaunch()) {
       app.setLoginItemSettings({ openAtLogin: true })
