@@ -20,6 +20,7 @@
     "electron": "^40.6.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
+    "rcedit": "^5.0.2",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
   },
@@ -37,7 +38,8 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -50,6 +52,7 @@
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico"
     },
+    "afterPack": "./scripts/afterPack.cjs",
     "publish": {
       "provider": "github",
       "owner": "NicolasMB3",
