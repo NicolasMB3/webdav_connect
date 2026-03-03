@@ -50,7 +50,8 @@
       "shortcutName": "CMC Drive",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico"
+      "installerHeaderIcon": "build/icon.ico",
+      "include": "build/installer.nsh"
     },
     "afterPack": "./scripts/afterPack.cjs",
     "publish": {

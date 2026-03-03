@@ -19,6 +19,19 @@ jobs:
 
       - run: npm ci
 
+      - name: Download rclone
+        run: |
+          Invoke-WebRequest -Uri "https://downloads.rclone.org/v1.69.3/rclone-v1.69.3-windows-amd64.zip" -OutFile rclone.zip
+          Expand-Archive rclone.zip -DestinationPath rclone-tmp
+          Copy-Item "rclone-tmp/rclone-v1.69.3-windows-amd64/rclone.exe" "resources/rclone.exe"
+          Remove-Item rclone.zip, rclone-tmp -Recurse -Force
+        shell: pwsh
+
+      - name: Download WinFsp MSI
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/winfsp/winfsp/releases/download/v2.1/winfsp-2.1.25156.msi" -OutFile "build/winfsp.msi"
+        shell: pwsh
+
       - run: npm run package
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
