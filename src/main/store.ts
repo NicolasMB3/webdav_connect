@@ -86,6 +86,7 @@ export function deleteServer(id: string): void {
 
 export function clearAllServers(): void {
   store.delete('servers')
+  store.delete('securityCache')
 }
 
 export function isFirstLaunch(): boolean {
@@ -96,26 +97,3 @@ export function markLaunched(): void {
   store.set('launched', true)
 }
 
-// Security configuration cache per URL
-// Registry settings are persistent — skip disableSecurityWarning on subsequent launches
-function securityCacheKey(url: string): string {
-  const parsed = new URL(url)
-  const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80')
-  // v5: use non-policy registry path for basichostallowlist (Policies ACL-restricted on some machines)
-  return `v5:${parsed.protocol}//${parsed.hostname}:${port}`
-}
-
-export function isUrlSecurityConfigured(url: string): boolean {
-  const cache = store.get('securityCache', {}) as Record<string, boolean>
-  return cache[securityCacheKey(url)] === true
-}
-
-export function markUrlSecurityConfigured(url: string): void {
-  const cache = store.get('securityCache', {}) as Record<string, boolean>
-  cache[securityCacheKey(url)] = true
-  store.set('securityCache', cache)
-}
-
-export function resetSecurityCache(): void {
-  store.delete('securityCache')
-}
