@@ -4,6 +4,24 @@ import { getDriveSpace } from './rclone-manager'
 import { existsSync } from 'fs'
 import type { ServerConfig } from './store'
 
+const ICON_SIZE = { width: 16, height: 16 }
+const DOT_RADIUS = 3
+const DOT_COLORS = {
+  green: [76, 175, 80] as const,
+  orange: [255, 152, 0] as const,
+  red: [244, 67, 54] as const
+}
+const LOW_SPACE_THRESHOLD_BYTES = 5 * 1024 ** 3
+const MENU_UPDATE_INTERVAL_MS = 10_000
+const SPACE_CHECK_CYCLE_COUNT = 30
+
+function getTrayIconPath(): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'resources', 'icon.png')
+  }
+  return join(__dirname, '../../resources/icon.png')
+}
+
 let tray: Tray | null = null
 
 export interface TrayOptions {
@@ -20,11 +38,10 @@ function createIconWithDot(
 
   const cx = width - 4
   const cy = height - 4
-  const r = 3
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) {
+      if ((x - cx) ** 2 + (y - cy) ** 2 <= DOT_RADIUS * DOT_RADIUS) {
         const offset = (y * width + x) * 4
         bitmap[offset] = color[2] // B
         bitmap[offset + 1] = color[1] // G
@@ -42,18 +59,18 @@ export function createTray(
   getServers: () => ServerConfig[],
   options?: TrayOptions
 ): Tray {
-  const iconPath = join(__dirname, '../../resources/icon.png')
+  const iconPath = getTrayIconPath()
   let baseIcon: Electron.NativeImage
   try {
-    baseIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+    baseIcon = nativeImage.createFromPath(iconPath).resize(ICON_SIZE)
   } catch {
     baseIcon = nativeImage.createEmpty()
   }
 
   // F4: Pre-generate colored icons once
-  const greenIcon = createIconWithDot(baseIcon, [76, 175, 80])
-  const orangeIcon = createIconWithDot(baseIcon, [255, 152, 0])
-  const redIcon = createIconWithDot(baseIcon, [244, 67, 54])
+  const greenIcon = createIconWithDot(baseIcon, [...DOT_COLORS.green])
+  const orangeIcon = createIconWithDot(baseIcon, [...DOT_COLORS.orange])
+  const redIcon = createIconWithDot(baseIcon, [...DOT_COLORS.red])
 
   tray = new Tray(baseIcon)
   tray.setToolTip('CMC Drive')
@@ -100,24 +117,23 @@ export function createTray(
       tray!.setImage(redIcon)
     }
 
-    // F5: Check disk space every 5 minutes (30 cycles × 10s = 300s)
+    // F5: Check disk space every 5 minutes (SPACE_CHECK_CYCLE_COUNT × MENU_UPDATE_INTERVAL_MS)
     updateCycle++
-    if (updateCycle % 30 === 0) {
+    if (updateCycle % SPACE_CHECK_CYCLE_COUNT === 0) {
       for (const { server, connected } of results) {
         if (!connected) continue
         try {
           const space = await getDriveSpace(server.driveLetter)
           if (space) {
             const freeBytes = space.totalBytes - space.usedBytes
-            const threshold = 5 * 1024 ** 3 // 5 GB
-            if (freeBytes < threshold && !lowSpaceNotified.has(server.id)) {
+            if (freeBytes < LOW_SPACE_THRESHOLD_BYTES && !lowSpaceNotified.has(server.id)) {
               const freeGB = (freeBytes / 1024 ** 3).toFixed(1)
               new Notification({
                 title: 'CMC Drive — Espace disque faible',
                 body: `${server.driveName} (${server.driveLetter}) : ${freeGB} Go restants`
               }).show()
               lowSpaceNotified.add(server.id)
-            } else if (freeBytes >= threshold && lowSpaceNotified.has(server.id)) {
+            } else if (freeBytes >= LOW_SPACE_THRESHOLD_BYTES && lowSpaceNotified.has(server.id)) {
               lowSpaceNotified.delete(server.id)
             }
           }
@@ -162,7 +178,7 @@ export function createTray(
   }
 
   updateMenu()
-  setInterval(updateMenu, 10_000)
+  setInterval(updateMenu, MENU_UPDATE_INTERVAL_MS)
 
   tray.on('double-click', () => {
     const win = getWindow()

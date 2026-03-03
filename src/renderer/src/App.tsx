@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Titlebar from './components/Titlebar'
 import DriveCard, { DriveStatus } from './components/DriveCard'
 import LoginDialog from './components/LoginDialog'
@@ -22,6 +22,8 @@ function App(): React.JSX.Element {
   const [loginTarget, setLoginTarget] = useState<ServerConfig | null>(null)
   const [showLogin, setShowLogin] = useState(false)
   const [updateReady, setUpdateReady] = useState<string | null>(null)
+  const serversRef = useRef<ServerState[]>([])
+  serversRef.current = servers
 
   const updateServer = useCallback((id: string, partial: Partial<ServerState>) => {
     setServers((prev) => prev.map((s) => (s.config.id === id ? { ...s, ...partial } : s)))
@@ -87,52 +89,39 @@ function App(): React.JSX.Element {
 
   // Listen for update events
   useEffect(() => {
-    window.api.updater.onUpdateDownloaded((version) => {
+    const unsub = window.api.updater.onUpdateDownloaded((version) => {
       setUpdateReady(version)
     })
+    return unsub
   }, [])
 
   // Listen for status changes from main process (e.g. auto-connect)
   useEffect(() => {
-    window.api.onStatusChanged((serverId, newStatus) => {
+    const unsub = window.api.onStatusChanged((serverId, newStatus) => {
       if (newStatus === 'connected') {
-        setServers((prev) => {
-          const server = prev.find((s) => s.config.id === serverId)
-          if (server) {
-            window.api.webdav
-              .getSpace(server.config.driveLetter)
-              .then((space) => {
-                if (space) {
-                  setServers((p) =>
-                    p.map((s) =>
-                      s.config.id === serverId
-                        ? { ...s, usedBytes: space.usedBytes, totalBytes: space.totalBytes }
-                        : s
-                    )
-                  )
-                }
-              })
-              .catch(() => {})
-          }
-          return prev.map((s) =>
+        setServers((prev) =>
+          prev.map((s) =>
             s.config.id === serverId ? { ...s, status: 'connected' } : s
           )
-        })
+        )
+        // Fetch space outside setState updater
+        const server = serversRef.current.find((s) => s.config.id === serverId)
+        if (server) {
+          refreshSpace(server.config.id, server.config.driveLetter)
+        }
       }
     })
-  }, [])
+    return unsub
+  }, [refreshSpace])
 
   // Periodic space refresh every 30s for all connected servers
   useEffect(() => {
     const interval = setInterval(() => {
-      setServers((current) => {
-        current
-          .filter((s) => s.status === 'connected')
-          .forEach((s) => {
-            refreshSpace(s.config.id, s.config.driveLetter)
-          })
-        return current
-      })
+      serversRef.current
+        .filter((s) => s.status === 'connected')
+        .forEach((s) => {
+          refreshSpace(s.config.id, s.config.driveLetter)
+        })
     }, 30_000)
     return () => clearInterval(interval)
   }, [refreshSpace])
@@ -325,7 +314,7 @@ function App(): React.JSX.Element {
         <span className="footer-status">
           {connectedCount} / {servers.length} connecté(s)
         </span>
-        <span className="footer-version">v2.0.2</span>
+        <span className="footer-version">v2.0.3</span>
       </div>
     </div>
   )

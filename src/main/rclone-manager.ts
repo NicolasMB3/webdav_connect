@@ -5,10 +5,19 @@ import { app } from 'electron';
 import http from 'http';
 
 // ---------------------------------------------------------------------------
-// Interfaces (compatible with webdav-manager.ts)
+// Constants
 // ---------------------------------------------------------------------------
 
-export interface ConnectOptions {
+const RC_PORT_BASE = 5572;
+const MOUNT_TIMEOUT_MS = 30_000;
+const MOUNT_POLL_INTERVAL_MS = 500;
+const DEFAULT_VOLNAME = 'CMC Drive';
+
+// ---------------------------------------------------------------------------
+// Interfaces
+// ---------------------------------------------------------------------------
+
+interface ConnectOptions {
   url: string;
   driveLetter: string;
   username: string;
@@ -16,7 +25,7 @@ export interface ConnectOptions {
   driveName?: string;
 }
 
-export interface DriveSpace {
+interface DriveSpace {
   usedBytes: number;
   totalBytes: number;
 }
@@ -36,7 +45,7 @@ interface MountEntry {
 // ---------------------------------------------------------------------------
 
 const mounts = new Map<string, MountEntry>();
-let nextRcPort = 5572;
+let nextRcPort = RC_PORT_BASE;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -163,7 +172,7 @@ export async function connectDrive(
 
   const rcPort = allocatePort();
   const logPath = join(getLogDir(), `rclone-${serverId}.log`);
-  const volname = opts.driveName || 'CMC Drive';
+  const volname = opts.driveName || DEFAULT_VOLNAME;
 
   // On-the-fly remote: :webdav,url="...",user="...",pass="...": DRIVE_LETTER
   const remoteSpec = `:webdav,url="${opts.url}",user="${opts.username}",pass="${obscured}":`;
@@ -203,11 +212,11 @@ export async function connectDrive(
   });
 
   // Poll filesystem until the drive letter appears (500ms intervals, 30s timeout)
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + MOUNT_TIMEOUT_MS;
   let ready = false;
 
   while (Date.now() < deadline) {
-    await sleep(500);
+    await sleep(MOUNT_POLL_INTERVAL_MS);
     if (existsSync(opts.driveLetter + '\\')) {
       ready = true;
       break;
@@ -223,7 +232,7 @@ export async function connectDrive(
     }
     mounts.delete(serverId);
     throw new Error(
-      `Timeout: rclone mount for ${opts.driveLetter} did not become ready within 30s. Check ${logPath} for details.`
+      `Timeout: rclone mount for ${opts.driveLetter} did not become ready within ${MOUNT_TIMEOUT_MS / 1000}s. Check ${logPath} for details.`
     );
   }
 }
@@ -232,7 +241,7 @@ export async function connectDrive(
  * Disconnect a mount by server ID.
  * Tries the RC API first (mount/unmount then core/quit), falls back to process.kill().
  */
-export async function disconnectDrive(serverId: string): Promise<void> {
+async function disconnectDrive(serverId: string): Promise<void> {
   const entry = mounts.get(serverId);
   if (!entry) return;
 
@@ -274,31 +283,6 @@ export async function disconnectByDriveLetter(driveLetter: string): Promise<void
       await disconnectDrive(serverId);
       return;
     }
-  }
-}
-
-/**
- * Synchronous check: is the server ID present in our mount map?
- */
-export function isDriveConnected(serverId: string): boolean {
-  return mounts.has(serverId);
-}
-
-/**
- * Asynchronous check: verify via the RC API that the mount is alive.
- */
-export async function isDriveConnectedAsync(serverId: string): Promise<boolean> {
-  const entry = mounts.get(serverId);
-  if (!entry) return false;
-
-  try {
-    const result = await rcPost<{ mountPoints?: Array<{ MountPoint: string }> }>(
-      entry.rcPort,
-      'mount/listmounts'
-    );
-    return !!(result.mountPoints && result.mountPoints.length > 0);
-  } catch {
-    return false;
   }
 }
 
@@ -362,13 +346,4 @@ export function killAll(): void {
     }
   }
   mounts.clear();
-}
-
-/**
- * Get mount info for a server ID (RC port and drive letter).
- */
-export function getMountInfo(serverId: string): { rcPort: number; driveLetter: string } | null {
-  const entry = mounts.get(serverId);
-  if (!entry) return null;
-  return { rcPort: entry.rcPort, driveLetter: entry.driveLetter };
 }

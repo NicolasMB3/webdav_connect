@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
@@ -40,21 +40,31 @@ contextBridge.exposeInMainWorld('api', {
   updater: {
     check: () => ipcRenderer.invoke('updater:check'),
     install: () => ipcRenderer.invoke('updater:install'),
-    onUpdateAvailable: (cb: (version: string) => void) => {
-      ipcRenderer.on('updater:updateAvailable', (_e, version) => cb(version))
+    onUpdateAvailable: (cb: (version: string) => void): (() => void) => {
+      const handler = (_e: IpcRendererEvent, version: string): void => { cb(version) }
+      ipcRenderer.on('updater:updateAvailable', handler)
+      return () => { ipcRenderer.removeListener('updater:updateAvailable', handler) }
     },
-    onUpdateDownloaded: (cb: (version: string) => void) => {
-      ipcRenderer.on('updater:updateDownloaded', (_e, version) => cb(version))
+    onUpdateDownloaded: (cb: (version: string) => void): (() => void) => {
+      const handler = (_e: IpcRendererEvent, version: string): void => { cb(version) }
+      ipcRenderer.on('updater:updateDownloaded', handler)
+      return () => { ipcRenderer.removeListener('updater:updateDownloaded', handler) }
     },
-    onUpToDate: (cb: () => void) => {
-      ipcRenderer.on('updater:upToDate', () => cb())
+    onUpToDate: (cb: () => void): (() => void) => {
+      const handler = (): void => { cb() }
+      ipcRenderer.on('updater:upToDate', handler)
+      return () => { ipcRenderer.removeListener('updater:upToDate', handler) }
     },
-    onError: (cb: (message: string) => void) => {
-      ipcRenderer.on('updater:error', (_e, message) => cb(message))
+    onError: (cb: (message: string) => void): (() => void) => {
+      const handler = (_e: IpcRendererEvent, message: string): void => { cb(message) }
+      ipcRenderer.on('updater:error', handler)
+      return () => { ipcRenderer.removeListener('updater:error', handler) }
     }
   },
   notify: (title: string, body: string) => ipcRenderer.send('notify', { title, body }),
-  onStatusChanged: (callback: (serverId: string, status: string) => void) => {
-    ipcRenderer.on('webdav:statusChanged', (_e, id, status) => callback(id, status))
+  onStatusChanged: (callback: (serverId: string, status: string) => void): (() => void) => {
+    const handler = (_e: IpcRendererEvent, id: string, status: string): void => { callback(id, status) }
+    ipcRenderer.on('webdav:statusChanged', handler)
+    return () => { ipcRenderer.removeListener('webdav:statusChanged', handler) }
   }
 })

@@ -40,12 +40,12 @@ interface Window {
     updater: {
       check: () => Promise<void>
       install: () => Promise<void>
-      onUpdateAvailable: (cb: (version: string) => void) => void
-      onUpdateDownloaded: (cb: (version: string) => void) => void
-      onUpToDate: (cb: () => void) => void
-      onError: (cb: (message: string) => void) => void
+      onUpdateAvailable: (cb: (version: string) => void) => () => void
+      onUpdateDownloaded: (cb: (version: string) => void) => () => void
+      onUpToDate: (cb: () => void) => () => void
+      onError: (cb: (message: string) => void) => () => void
     }
     notify: (title: string, body: string) => void
-    onStatusChanged: (callback: (serverId: string, status: string) => void) => void
+    onStatusChanged: (callback: (serverId: string, status: string) => void) => () => void
   }
 }

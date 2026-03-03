@@ -11,10 +11,11 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
 
   useEffect(() => {
     window.api.app.getAutoStart().then(setAutoStart)
-    window.api.updater.onUpToDate(() => setUpdateStatus('upToDate'))
-    window.api.updater.onUpdateAvailable(() => setUpdateStatus('available'))
-    window.api.updater.onUpdateDownloaded(() => setUpdateStatus('downloaded'))
-    window.api.updater.onError(() => setUpdateStatus('error'))
+    const unsub1 = window.api.updater.onUpToDate(() => setUpdateStatus('upToDate'))
+    const unsub2 = window.api.updater.onUpdateAvailable(() => setUpdateStatus('available'))
+    const unsub3 = window.api.updater.onUpdateDownloaded(() => setUpdateStatus('downloaded'))
+    const unsub4 = window.api.updater.onError(() => setUpdateStatus('error'))
+    return () => { unsub1(); unsub2(); unsub3(); unsub4() }
   }, [])
 
   const handleAutoStartChange = async (checked: boolean): Promise<void> => {
@@ -38,7 +39,7 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
       </div>
 
       <div className="settings-section">
-        <h3>Demarrage</h3>
+        <h3>Démarrage</h3>
         <label className="settings-toggle">
           <span>Lancer CMC Drive au démarrage de Windows</span>
           <input type="checkbox" checked={autoStart} onChange={e => handleAutoStartChange(e.target.checked)} />
@@ -76,9 +77,9 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
       </div>
 
       <div className="settings-section">
-        <h3>A propos</h3>
+        <h3>À propos</h3>
         <div className="settings-about">
-          <p><strong>CMC Drive</strong> v2.0.2</p>
+          <p><strong>CMC Drive</strong> v2.0.3</p>
           <p className="settings-about-desc">Client WebDAV pour NAS CMC-06</p>
         </div>
       </div>

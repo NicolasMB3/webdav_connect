@@ -49,10 +49,12 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
   const [editName, setEditName] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const startEditing = () => {
+  const startEditing = (): void => {
     setEditName(name)
     setEditing(true)
-    setTimeout(() => inputRef.current?.select(), 0)
+    requestAnimationFrame(() => {
+      inputRef.current?.select()
+    })
   }
 
   const commitRename = () => {
@@ -67,6 +69,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
     <div className={`drive-card ${isConnected ? 'drive-card--connected' : ''}`}>
       <div className="drive-card-icon">
         <svg
+          aria-hidden="true"
           width="40"
           height="40"
           viewBox="0 0 24 24"
@@ -105,6 +108,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
                   title="Renommer"
                 >
                   <svg
+                    aria-hidden="true"
                     width="12"
                     height="12"
                     viewBox="0 0 24 24"
@@ -152,6 +156,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
               title="Ouvrir dans l'Explorateur"
             >
               <svg
+                aria-hidden="true"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -169,6 +174,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
               title="Déconnecter"
             >
               <svg
+                aria-hidden="true"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -188,6 +194,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
             title="Connecter"
           >
             <svg
+              aria-hidden="true"
               width="18"
               height="18"
               viewBox="0 0 24 24"
@@ -206,6 +213,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
             title="Supprimer"
           >
             <svg
+              aria-hidden="true"
               width="18"
               height="18"
               viewBox="0 0 24 24"

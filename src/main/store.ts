@@ -43,15 +43,7 @@ function migrateIfNeeded(): void {
 
 export function loadServers(): ServerConfig[] {
   migrateIfNeeded()
-  const servers = store.get('servers', []) as Array<{
-    id: string
-    url: string
-    driveLetter: string
-    username: string
-    password: string
-    autoConnect: boolean
-    driveName: string
-  }>
+  const servers = store.get('servers', []) as ServerConfig[]
   return servers.map((s) => {
     try {
       const decrypted = safeStorage.decryptString(Buffer.from(s.password, 'base64'))
@@ -65,7 +57,13 @@ export function loadServers(): ServerConfig[] {
 export function saveServer(config: ServerConfig): void {
   migrateIfNeeded()
   const servers = store.get('servers', []) as ServerConfig[]
-  const encrypted = safeStorage.encryptString(config.password).toString('base64')
+  let encrypted: string
+  try {
+    encrypted = safeStorage.encryptString(config.password).toString('base64')
+  } catch {
+    console.warn('[store] safeStorage.encryptString failed — storing empty password')
+    encrypted = ''
+  }
   const entry = { ...config, password: encrypted }
   const idx = servers.findIndex((s) => s.id === config.id)
   if (idx >= 0) {
@@ -86,7 +84,6 @@ export function deleteServer(id: string): void {
 
 export function clearAllServers(): void {
   store.delete('servers')
-  store.delete('securityCache')
 }
 
 export function isFirstLaunch(): boolean {

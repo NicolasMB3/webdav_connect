@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Notification, shell, powerMonitor } from 'electron'
 import { join } from 'path'
-import { appendFileSync, existsSync } from 'fs'
+import { existsSync } from 'fs'
+import { execFile as execFileCb } from 'child_process'
 import {
   connectDrive,
   disconnectByDriveLetter,
@@ -13,7 +14,8 @@ import {
   deleteServer,
   clearAllServers,
   isFirstLaunch,
-  markLaunched
+  markLaunched,
+  ServerConfig
 } from './store'
 import { createTray } from './tray'
 import { setupAutoUpdater, checkForUpdates, installUpdate, replayUpdateState } from './updater'
@@ -24,6 +26,8 @@ function getIconPath(): string {
   }
   return join(__dirname, '../../resources/icon.ico')
 }
+
+const RECONNECT_COOLDOWN_MS = 30_000
 
 // F2: Track intentionally disconnected servers (via UI) to avoid auto-reconnect
 const intentionalDisconnects = new Set<string>()
@@ -85,6 +89,25 @@ function sendStatus(serverId: string, status: string): void {
   }
 }
 
+async function connectServer(server: ServerConfig): Promise<void> {
+  await connectDrive(
+    server.id,
+    {
+      url: server.url,
+      driveLetter: server.driveLetter,
+      username: server.username,
+      password: server.password,
+      driveName: server.driveName
+    },
+    (code) => {
+      if (code !== null && code !== 0) {
+        sendStatus(server.id, 'disconnected')
+      }
+    }
+  )
+  sendStatus(server.id, 'connected')
+}
+
 // Window IPC handlers
 ipcMain.on('window:minimize', () => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize()
@@ -99,7 +122,7 @@ ipcMain.on('notify', (_e, { title, body }: { title: string; body: string }) => {
 })
 
 // WebDAV IPC handlers
-ipcMain.handle('webdav:connect', async (_e, opts) => {
+ipcMain.handle('webdav:connect', async (_e, opts: { url: string; driveLetter: string; username: string; password: string; driveName?: string }) => {
   const servers = loadServers()
   const server = servers.find((s) => s.driveLetter === opts.driveLetter)
   const serverId = server?.id || Date.now().toString()
@@ -128,20 +151,15 @@ ipcMain.handle('webdav:isConnected', async (_e, driveLetter: string) => {
 })
 
 ipcMain.on('webdav:openExplorer', (_e, driveLetter: string) => {
-  const target = driveLetter + '\\'
-  const logPath = join(app.getPath('userData'), 'debug.log')
-  appendFileSync(logPath, `[${new Date().toISOString()}] openExplorer: ${target}\n`)
-  shell.openPath(target).then((err) => {
-    appendFileSync(logPath, `[${new Date().toISOString()}] result: ${err || 'OK'}\n`)
-  })
+  shell.openPath(driveLetter + '\\')
 })
 
 ipcMain.handle('webdav:rename', async (_e, driveLetter: string, name: string) => {
-  const { execFile: execFileCb } = require('child_process')
-  const safeName = name.replace(/'/g, "''")
+  const letter = driveLetter.replace(/[^A-Za-z]/g, '')
+  const safeName = name.replace(/'/g, "''").replace(/[`$]/g, '')
   execFileCb('powershell.exe', [
     '-WindowStyle', 'Hidden', '-NoProfile', '-Command',
-    `$letter = '${driveLetter.replace(':', '')}'; Get-ChildItem "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2" | ForEach-Object { New-ItemProperty -Path $_.PSPath -Name '_LabelFromReg' -Value '${safeName}' -Force -ErrorAction SilentlyContinue } | Out-Null`
+    `Get-ChildItem "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2" | ForEach-Object { New-ItemProperty -Path $_.PSPath -Name '_LabelFromReg' -Value '${safeName}' -Force -ErrorAction SilentlyContinue } | Out-Null`
   ], { windowsHide: true }, () => {})
 })
 
@@ -150,7 +168,7 @@ ipcMain.handle('store:loadAll', async () => {
   return loadServers()
 })
 
-ipcMain.handle('store:save', async (_e, config) => {
+ipcMain.handle('store:save', async (_e, config: ServerConfig) => {
   saveServer(config)
 })
 
@@ -180,10 +198,10 @@ ipcMain.handle('app:setAutoStart', (_e, enabled: boolean) => {
   app.setLoginItemSettings({ openAtLogin: enabled })
 })
 
-// F2: Auto-reconnect servers that dropped unexpectedly (with 30s cooldown)
+// F2: Auto-reconnect servers that dropped unexpectedly (with cooldown)
 async function reconnectServers(): Promise<void> {
   const now = Date.now()
-  if (now - lastReconnectAttempt < 30_000) return
+  if (now - lastReconnectAttempt < RECONNECT_COOLDOWN_MS) return
   lastReconnectAttempt = now
 
   const servers = loadServers()
@@ -194,25 +212,7 @@ async function reconnectServers(): Promise<void> {
   if (toReconnect.length === 0) return
 
   await Promise.all(
-    toReconnect.map((server) =>
-      connectDrive(
-        server.id,
-        {
-          url: server.url,
-          driveLetter: server.driveLetter,
-          username: server.username,
-          password: server.password,
-          driveName: server.driveName
-        },
-        (code) => {
-          if (code !== null && code !== 0) {
-            sendStatus(server.id, 'disconnected')
-          }
-        }
-      )
-        .then(() => sendStatus(server.id, 'connected'))
-        .catch(() => {})
-    )
+    toReconnect.map((server) => connectServer(server).catch(() => {}))
   )
 }
 
@@ -258,25 +258,7 @@ if (!gotLock) {
 
     if (autoConnectServers.length > 0) {
       await Promise.all(
-        autoConnectServers.map((server) =>
-          connectDrive(
-            server.id,
-            {
-              url: server.url,
-              driveLetter: server.driveLetter,
-              username: server.username,
-              password: server.password,
-              driveName: server.driveName
-            },
-            (code) => {
-              if (code !== null && code !== 0) {
-                sendStatus(server.id, 'disconnected')
-              }
-            }
-          )
-            .then(() => sendStatus(server.id, 'connected'))
-            .catch(() => {})
-        )
+        autoConnectServers.map((server) => connectServer(server).catch(() => {}))
       )
     }
   })
