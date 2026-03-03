@@ -171,7 +171,11 @@ async function disableSecurityWarning(url: string): Promise<void> {
       `New-ItemProperty -Path '${zoneMap}\\Ranges\\Range100' -Name ':Range' -Value '${hostname}' -PropertyType String -Force`,
       `New-ItemProperty -Path '${zoneMap}\\Ranges\\Range100' -Name 'https' -Value 1 -PropertyType DWord -Force`,
       `New-ItemProperty -Path '${zoneMap}\\Ranges\\Range100' -Name '*' -Value 1 -PropertyType DWord -Force`
-    ].join('; ')
+    ].join('; '),
+    // Office 365/2016+: whitelist host for Basic Auth prompts (fixes "méthode de connexion non sécurisée")
+    `$offId = 'HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Common\\Identity'; $null = New-Item -Path $offId -Force; try { $c = (Get-ItemProperty $offId -Name basichostallowlist -EA Stop).basichostallowlist } catch { $c = '' }; if (-not $c -or ($c -split ';') -notcontains '${hostname}') { New-ItemProperty -Path $offId -Name basichostallowlist -Value $(if($c){"$c;${hostname}"}else{'${hostname}'}) -PropertyType ExpandString -Force }`,
+    // Office BasicAuthLevel=2 + read-write WebDAV mode (covers Office 16.0 and 15.0)
+    `$versions = @('16.0','15.0'); foreach($v in $versions) { $p = "HKCU:\\Software\\Microsoft\\Office\\$v\\Common\\Internet"; if (Test-Path "HKCU:\\Software\\Microsoft\\Office\\$v") { $null = New-Item -Path $p -Force; Set-ItemProperty -Path $p -Name 'BasicAuthLevel' -Value 2; Set-ItemProperty -Path $p -Name 'OpenDocumentsReadWriteWhileBrowsing' -Value 1 } }`
   ]
 
   // Domain entry - hierarchical (cmc-06.fr\stockage)
@@ -210,14 +214,17 @@ async function disableSecurityWarning(url: string): Promise<void> {
       `$saveZone = $false; try { $a = Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Attachments' -ErrorAction Stop; $saveZone = ($a.SaveZoneInformation -eq 1) -and ($a.ScanWithAntiVirus -eq 1) } catch {}`,
       `$lowRisk = $false; try { $r = Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Associations' -ErrorAction Stop; $lowRisk = ($r.LowRiskFileTypes -ne $null) } catch {}`,
       ...(uncHost ? [`$uncDom = Test-Path 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ZoneMap\\Domains\\${uncHost}'`] : [`$uncDom = $true`]),
-      `Write-Output "$($z3.'1806')|$($z3.'1802')|$($z3.'1803')|$($z3.'2200')|$($z2.'1806')|$feat|$saveZone|$lowRisk|$uncDom"`
+      `$wcAuth = $false; try { $wc = Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\WebClient\\Parameters'; $wcAuth = ($wc.BasicAuthLevel -eq 2) } catch {}`,
+      `$wcFwd = $false; try { $wc = Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\WebClient\\Parameters'; $fwd = $wc.AuthForwardServerList; if ($fwd -contains 'https://*.${domainSplit ? domainSplit.domain : hostname}') { $wcFwd = $true } } catch {}`,
+      `Write-Output "$($z3.'1806')|$($z3.'1802')|$($z3.'1803')|$($z3.'2200')|$($z2.'1806')|$feat|$saveZone|$lowRisk|$uncDom|$wcAuth|$wcFwd"`
     ].join('; '))
 
     const parts = check.trim().split('|')
     const needsElevation =
       parts[0] !== '0' || parts[1] !== '0' || parts[2] !== '0' || parts[3] !== '0' ||
       parts[4] !== '0' ||
-      parts[5] !== 'True' || parts[6] !== 'True' || parts[7] !== 'True' || parts[8] !== 'True'
+      parts[5] !== 'True' || parts[6] !== 'True' || parts[7] !== 'True' || parts[8] !== 'True' ||
+      parts[9] !== 'True' || parts[10] !== 'True'
 
     if (needsElevation) {
       const hklmZones = 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\Zones'
@@ -272,6 +279,12 @@ async function disableSecurityWarning(url: string): Promise<void> {
         // DisableSecuritySettingsCheck
         `$null = New-Item -Path '${hklmIESecurity}' -Force`,
         `New-ItemProperty -Path '${hklmIESecurity}' -Name 'DisableSecuritySettingsCheck' -Value 1 -PropertyType DWord -Force`,
+        // WebClient: BasicAuthLevel=2, AuthForwardServerList, FileSizeLimitInBytes (fixes Office WebDAV)
+        `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\WebClient\\Parameters' -Name 'BasicAuthLevel' -Value 2`,
+        `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\WebClient\\Parameters' -Name 'FileSizeLimitInBytes' -Value 4294967295`,
+        `$wcp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\WebClient\\Parameters'; try { $fwd = @((Get-ItemProperty -Path $wcp -Name AuthForwardServerList -EA Stop).AuthForwardServerList) } catch { $fwd = @() }; $entry = 'https://*.${domainSplit ? domainSplit.domain : hostname}'; if ($fwd -notcontains $entry) { $fwd = @($fwd | Where-Object { $_ }) + $entry; Set-ItemProperty -Path $wcp -Name AuthForwardServerList -Value ([string[]]$fwd) }`,
+        // Restart WebClient to apply new parameters
+        `Restart-Service WebClient -Force`,
         // Notify Explorer to reload Internet Settings after HKLM changes
         `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class WinInet { [DllImport("wininet.dll", SetLastError=true)] public static extern bool InternetSetOption(IntPtr h, int o, IntPtr b, int l); }'`,
         `[WinInet]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0)`,
