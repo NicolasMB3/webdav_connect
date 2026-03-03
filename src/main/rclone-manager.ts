@@ -85,7 +85,7 @@ function rcPost<T = unknown>(port: number, endpoint: string, body: Record<string
     const data = JSON.stringify(body);
     const req = http.request(
       {
-        hostname: 'localhost',
+        hostname: '127.0.0.1',
         port,
         path: `/${endpoint}`,
         method: 'POST',
@@ -180,7 +180,7 @@ export async function connectDrive(
     '--vfs-case-insensitive',
     '--volname', volname,
     '--rc',
-    '--rc-addr', `localhost:${rcPort}`,
+    '--rc-addr', `127.0.0.1:${rcPort}`,
     '--rc-no-auth',
     '--log-file', logPath,
     '--log-level', 'INFO'
