@@ -1,22 +1,20 @@
 import { app, BrowserWindow, ipcMain, Notification, shell, powerMonitor } from 'electron'
 import { join } from 'path'
-import { appendFileSync } from 'fs'
+import { appendFileSync, existsSync } from 'fs'
 import {
   connectDrive,
   disconnectDrive,
+  disconnectByDriveLetter,
   getDriveSpace,
-  isDriveConnected,
-  ensureWebClient,
-  renameDrive
-} from './webdav-manager'
+  killAll
+} from './rclone-manager'
 import {
   loadServers,
   saveServer,
   deleteServer,
   clearAllServers,
   isFirstLaunch,
-  markLaunched,
-  resetSecurityCache
+  markLaunched
 } from './store'
 import { createTray } from './tray'
 import { setupAutoUpdater, checkForUpdates, installUpdate, replayUpdateState } from './updater'
@@ -103,19 +101,23 @@ ipcMain.on('notify', (_e, { title, body }: { title: string; body: string }) => {
 
 // WebDAV IPC handlers
 ipcMain.handle('webdav:connect', async (_e, opts) => {
-  // F2: Remove from intentional disconnects on manual connect
   const servers = loadServers()
   const server = servers.find((s) => s.driveLetter === opts.driveLetter)
-  if (server) intentionalDisconnects.delete(server.id)
-  await connectDrive({ ...opts, iconPath: getIconPath() })
+  const serverId = server?.id || Date.now().toString()
+  if (server) intentionalDisconnects.delete(serverId)
+
+  await connectDrive(serverId, opts, (code) => {
+    if (code !== null && code !== 0) {
+      sendStatus(serverId, 'disconnected')
+    }
+  })
 })
 
 ipcMain.handle('webdav:disconnect', async (_e, driveLetter: string) => {
-  // F2: Mark as intentionally disconnected to prevent auto-reconnect
   const servers = loadServers()
   const server = servers.find((s) => s.driveLetter === driveLetter)
   if (server) intentionalDisconnects.add(server.id)
-  await disconnectDrive(driveLetter)
+  await disconnectByDriveLetter(driveLetter)
 })
 
 ipcMain.handle('webdav:space', async (_e, driveLetter: string) => {
@@ -123,7 +125,7 @@ ipcMain.handle('webdav:space', async (_e, driveLetter: string) => {
 })
 
 ipcMain.handle('webdav:isConnected', async (_e, driveLetter: string) => {
-  return isDriveConnected(driveLetter)
+  return existsSync(driveLetter + '\\')
 })
 
 ipcMain.on('webdav:openExplorer', (_e, driveLetter: string) => {
@@ -136,7 +138,12 @@ ipcMain.on('webdav:openExplorer', (_e, driveLetter: string) => {
 })
 
 ipcMain.handle('webdav:rename', async (_e, driveLetter: string, name: string) => {
-  await renameDrive(driveLetter, name)
+  const { execFile: execFileCb } = require('child_process')
+  const safeName = name.replace(/'/g, "''")
+  execFileCb('powershell.exe', [
+    '-WindowStyle', 'Hidden', '-NoProfile', '-Command',
+    `$letter = '${driveLetter.replace(':', '')}'; Get-ChildItem "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2" | ForEach-Object { New-ItemProperty -Path $_.PSPath -Name '_LabelFromReg' -Value '${safeName}' -Force -ErrorAction SilentlyContinue } | Out-Null`
+  ], { windowsHide: true }, () => {})
 })
 
 // Store IPC handlers
@@ -154,7 +161,6 @@ ipcMain.handle('store:delete', async (_e, id: string) => {
 
 ipcMain.handle('store:clearAll', async () => {
   clearAllServers()
-  resetSecurityCache()
 })
 
 // Updater IPC handlers
@@ -183,29 +189,30 @@ async function reconnectServers(): Promise<void> {
 
   const servers = loadServers()
   const toReconnect = servers.filter(
-    (s) => s.autoConnect && !intentionalDisconnects.has(s.id) && !isDriveConnected(s.driveLetter)
+    (s) => s.autoConnect && !intentionalDisconnects.has(s.id) && !existsSync(s.driveLetter + '\\')
   )
 
   if (toReconnect.length === 0) return
 
-  await ensureWebClient()
   await Promise.all(
     toReconnect.map((server) =>
       connectDrive(
+        server.id,
         {
           url: server.url,
           driveLetter: server.driveLetter,
           username: server.username,
           password: server.password,
-          driveName: server.driveName,
-          iconPath: getIconPath()
+          driveName: server.driveName
         },
-        { skipWebClientCheck: true }
+        (code) => {
+          if (code !== null && code !== 0) {
+            sendStatus(server.id, 'disconnected')
+          }
+        }
       )
         .then(() => sendStatus(server.id, 'connected'))
-        .catch(() => {
-          // Silent fail, will retry on next cycle
-        })
+        .catch(() => {})
     )
   )
 }
@@ -247,36 +254,38 @@ if (!gotLock) {
     // Auto-connect on startup for all servers with autoConnect enabled
     const servers = loadServers()
     const autoConnectServers = servers.filter(
-      (s) => s.autoConnect && !isDriveConnected(s.driveLetter)
+      (s) => s.autoConnect && !existsSync(s.driveLetter + '\\')
     )
 
     if (autoConnectServers.length > 0) {
-      // Start WebClient service once for all drives
-      await ensureWebClient()
-
-      // Connect all drives in parallel (skip individual WebClient checks)
       await Promise.all(
         autoConnectServers.map((server) =>
           connectDrive(
+            server.id,
             {
               url: server.url,
               driveLetter: server.driveLetter,
               username: server.username,
               password: server.password,
-              driveName: server.driveName,
-              iconPath: getIconPath()
+              driveName: server.driveName
             },
-            { skipWebClientCheck: true }
+            (code) => {
+              if (code !== null && code !== 0) {
+                sendStatus(server.id, 'disconnected')
+              }
+            }
           )
             .then(() => sendStatus(server.id, 'connected'))
-            .catch(() => {
-              // Silent fail on auto-connect, user can connect manually
-            })
+            .catch(() => {})
         )
       )
     }
   })
 }
+
+app.on('before-quit', () => {
+  killAll()
+})
 
 app.on('window-all-closed', () => {
   // No-op: app stays alive in tray
