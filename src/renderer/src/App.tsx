@@ -325,7 +325,7 @@ function App(): React.JSX.Element {
         <span className="footer-status">
           {connectedCount} / {servers.length} connecté(s)
         </span>
-        <span className="footer-version">v1.7.0</span>
+        <span className="footer-version">v1.7.1</span>
       </div>
     </div>
   )

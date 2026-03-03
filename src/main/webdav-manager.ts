@@ -173,9 +173,10 @@ async function disableSecurityWarning(url: string): Promise<void> {
       `New-ItemProperty -Path '${zoneMap}\\Ranges\\Range100' -Name '*' -Value 1 -PropertyType DWord -Force`
     ].join('; '),
     // Office 365/2016+: whitelist host for Basic Auth prompts (fixes "méthode de connexion non sécurisée")
-    `$offId = 'HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Common\\Identity'; $null = New-Item -Path $offId -Force; try { $c = (Get-ItemProperty $offId -Name basichostallowlist -EA Stop).basichostallowlist } catch { $c = '' }; if (-not $c -or ($c -split ';') -notcontains '${hostname}') { New-ItemProperty -Path $offId -Name basichostallowlist -Value $(if($c){"$c;${hostname}"}else{'${hostname}'}) -PropertyType ExpandString -Force }`,
-    // Office BasicAuthLevel=2 + read-write WebDAV mode (covers Office 16.0 and 15.0)
-    `$versions = @('16.0','15.0'); foreach($v in $versions) { $p = "HKCU:\\Software\\Microsoft\\Office\\$v\\Common\\Internet"; if (Test-Path "HKCU:\\Software\\Microsoft\\Office\\$v") { $null = New-Item -Path $p -Force; Set-ItemProperty -Path $p -Name 'BasicAuthLevel' -Value 2; Set-ItemProperty -Path $p -Name 'OpenDocumentsReadWriteWhileBrowsing' -Value 1 } }`
+    // + reset BasicAuthSuppressWarning to re-enable prompts if user clicked "Do not show again"
+    `$offId = 'HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Common\\Identity'; $null = New-Item -Path $offId -Force; try { $c = (Get-ItemProperty $offId -Name basichostallowlist -EA Stop).basichostallowlist } catch { $c = '' }; if (-not $c -or ($c -split ';') -notcontains '${hostname}') { New-ItemProperty -Path $offId -Name basichostallowlist -Value $(if($c){"$c;${hostname}"}else{'${hostname}'}) -PropertyType ExpandString -Force }; New-ItemProperty -Path $offId -Name 'BasicAuthSuppressWarning' -Value 0 -PropertyType DWord -Force`,
+    // Office BasicAuthLevel=2 (covers Office 16.0 and 15.0)
+    `$versions = @('16.0','15.0'); foreach($v in $versions) { $p = "HKCU:\\Software\\Microsoft\\Office\\$v\\Common\\Internet"; if (Test-Path "HKCU:\\Software\\Microsoft\\Office\\$v") { $null = New-Item -Path $p -Force; Set-ItemProperty -Path $p -Name 'BasicAuthLevel' -Value 2 } }`
   ]
 
   // Domain entry - hierarchical (cmc-06.fr\stockage)

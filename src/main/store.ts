@@ -101,8 +101,8 @@ export function markLaunched(): void {
 function securityCacheKey(url: string): string {
   const parsed = new URL(url)
   const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80')
-  // v2: invalidate cache to apply Office BasicAuth + WebClient AuthForward fixes
-  return `v2:${parsed.protocol}//${parsed.hostname}:${port}`
+  // v3: add BasicAuthSuppressWarning reset, remove OpenDocumentsReadWriteWhileBrowsing
+  return `v3:${parsed.protocol}//${parsed.hostname}:${port}`
 }
 
 export function isUrlSecurityConfigured(url: string): boolean {
