@@ -1,6 +1,7 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, shell, Notification } from 'electron'
 import { join } from 'path'
-import { isDriveConnectedAsync, getDriveSpace } from './webdav-manager'
+import { getDriveSpace } from './rclone-manager'
+import { existsSync } from 'fs'
 import type { ServerConfig } from './store'
 
 let tray: Tray | null = null
@@ -66,12 +67,10 @@ export function createTray(
 
   const updateMenu = async (): Promise<void> => {
     const servers = getServers()
-    const results = await Promise.all(
-      servers.map(async (s) => ({
-        server: s,
-        connected: await isDriveConnectedAsync(s.driveLetter)
-      }))
-    )
+    const results = servers.map((s) => ({
+      server: s,
+      connected: existsSync(s.driveLetter + '\\')
+    }))
 
     // F2 + F3: Detect unexpected disconnections
     for (const { server, connected } of results) {
