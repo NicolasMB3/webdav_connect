@@ -101,8 +101,8 @@ export function markLaunched(): void {
 function securityCacheKey(url: string): string {
   const parsed = new URL(url)
   const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80')
-  // v4: revert OpenDocumentsReadWriteWhileBrowsing=0 (v1.7.0 regression causing SharePoint dialog)
-  return `v4:${parsed.protocol}//${parsed.hostname}:${port}`
+  // v5: use non-policy registry path for basichostallowlist (Policies ACL-restricted on some machines)
+  return `v5:${parsed.protocol}//${parsed.hostname}:${port}`
 }
 
 export function isUrlSecurityConfigured(url: string): boolean {
