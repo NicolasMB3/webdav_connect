@@ -1,5 +1,6 @@
 import { spawn, execFile, ChildProcess } from 'child_process';
 import { join } from 'path';
+import { existsSync } from 'fs';
 import { app } from 'electron';
 import http from 'http';
 
@@ -201,23 +202,15 @@ export async function connectDrive(
     onExit?.(code);
   });
 
-  // Poll RC API until the mount appears (500ms intervals, 15s timeout)
-  const deadline = Date.now() + 15_000;
+  // Poll filesystem until the drive letter appears (500ms intervals, 30s timeout)
+  const deadline = Date.now() + 30_000;
   let ready = false;
 
   while (Date.now() < deadline) {
     await sleep(500);
-    try {
-      const result = await rcPost<{ mountPoints?: Array<{ MountPoint: string }> }>(
-        rcPort,
-        'mount/listmounts'
-      );
-      if (result.mountPoints && result.mountPoints.length > 0) {
-        ready = true;
-        break;
-      }
-    } catch {
-      // RC API not ready yet — keep polling
+    if (existsSync(opts.driveLetter + '\\')) {
+      ready = true;
+      break;
     }
   }
 
@@ -230,7 +223,7 @@ export async function connectDrive(
     }
     mounts.delete(serverId);
     throw new Error(
-      `Timeout: rclone mount for ${opts.driveLetter} did not become ready within 15s. Check ${logPath} for details.`
+      `Timeout: rclone mount for ${opts.driveLetter} did not become ready within 30s. Check ${logPath} for details.`
     );
   }
 }
