@@ -3,7 +3,6 @@ import { join } from 'path'
 import { appendFileSync, existsSync } from 'fs'
 import {
   connectDrive,
-  disconnectDrive,
   disconnectByDriveLetter,
   getDriveSpace,
   killAll
