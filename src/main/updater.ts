@@ -1,5 +1,11 @@
 import { autoUpdater } from 'electron-updater'
 import type { BrowserWindow } from 'electron'
+import {
+  IPC_UPDATER_UPDATE_AVAILABLE,
+  IPC_UPDATER_UPDATE_DOWNLOADED,
+  IPC_UPDATER_UP_TO_DATE,
+  IPC_UPDATER_ERROR
+} from '../shared/ipc-channels'
 
 const INITIAL_CHECK_DELAY_MS = 5_000
 const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1_000
@@ -38,21 +44,21 @@ export function setupAutoUpdater(getWindow: () => BrowserWindow | null): void {
   autoUpdater.on('checking-for-update', () => {})
 
   autoUpdater.on('update-available', (info) => {
-    sendToRenderer('updater:updateAvailable', info.version)
+    sendToRenderer(IPC_UPDATER_UPDATE_AVAILABLE, info.version)
   })
 
   autoUpdater.on('update-not-available', () => {
-    sendToRenderer('updater:upToDate')
+    sendToRenderer(IPC_UPDATER_UP_TO_DATE)
   })
 
   autoUpdater.on('download-progress', () => {})
 
   autoUpdater.on('update-downloaded', (info) => {
-    sendToRenderer('updater:updateDownloaded', info.version)
+    sendToRenderer(IPC_UPDATER_UPDATE_DOWNLOADED, info.version)
   })
 
   autoUpdater.on('error', (err) => {
-    sendToRenderer('updater:error', err.message)
+    sendToRenderer(IPC_UPDATER_ERROR, err.message)
   })
 
   const safeCheck = (): void => {

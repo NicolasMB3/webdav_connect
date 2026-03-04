@@ -19,6 +19,26 @@ import {
 } from './store'
 import { createTray } from './tray'
 import { setupAutoUpdater, checkForUpdates, installUpdate, replayUpdateState } from './updater'
+import {
+  IPC_WINDOW_MINIMIZE,
+  IPC_WINDOW_CLOSE,
+  IPC_WEBDAV_CONNECT,
+  IPC_WEBDAV_DISCONNECT,
+  IPC_WEBDAV_SPACE,
+  IPC_WEBDAV_IS_CONNECTED,
+  IPC_WEBDAV_OPEN_EXPLORER,
+  IPC_WEBDAV_RENAME,
+  IPC_WEBDAV_STATUS_CHANGED,
+  IPC_STORE_LOAD_ALL,
+  IPC_STORE_SAVE,
+  IPC_STORE_DELETE,
+  IPC_STORE_CLEAR_ALL,
+  IPC_APP_GET_AUTO_START,
+  IPC_APP_SET_AUTO_START,
+  IPC_UPDATER_CHECK,
+  IPC_UPDATER_INSTALL,
+  IPC_NOTIFY
+} from '../shared/ipc-channels'
 
 function getIconPath(): string {
   if (app.isPackaged) {
@@ -65,7 +85,7 @@ function createWindow(): BrowserWindow {
   // Flush queued status changes + replay update state once the renderer is ready
   win.webContents.on('did-finish-load', () => {
     for (const [id, status] of pendingStatusChanges) {
-      win.webContents.send('webdav:statusChanged', id, status)
+      win.webContents.send(IPC_WEBDAV_STATUS_CHANGED, id, status)
     }
     pendingStatusChanges.length = 0
     replayUpdateState(win)
@@ -83,7 +103,7 @@ function getOrCreateWindow(): BrowserWindow {
 
 function sendStatus(serverId: string, status: string): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('webdav:statusChanged', serverId, status)
+    mainWindow.webContents.send(IPC_WEBDAV_STATUS_CHANGED, serverId, status)
   } else {
     pendingStatusChanges.push([serverId, status])
   }
@@ -109,20 +129,20 @@ async function connectServer(server: ServerConfig): Promise<void> {
 }
 
 // Window IPC handlers
-ipcMain.on('window:minimize', () => {
+ipcMain.on(IPC_WINDOW_MINIMIZE, () => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize()
 })
-ipcMain.on('window:close', () => {
+ipcMain.on(IPC_WINDOW_CLOSE, () => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
 })
 
 // Notification IPC handler
-ipcMain.on('notify', (_e, { title, body }: { title: string; body: string }) => {
+ipcMain.on(IPC_NOTIFY, (_e, { title, body }: { title: string; body: string }) => {
   new Notification({ title, body }).show()
 })
 
 // WebDAV IPC handlers
-ipcMain.handle('webdav:connect', async (_e, opts: { url: string; driveLetter: string; username: string; password: string; driveName?: string }) => {
+ipcMain.handle(IPC_WEBDAV_CONNECT, async (_e, opts: { url: string; driveLetter: string; username: string; password: string; driveName?: string }) => {
   const servers = loadServers()
   const server = servers.find((s) => s.driveLetter === opts.driveLetter)
   const serverId = server?.id || Date.now().toString()
@@ -135,26 +155,26 @@ ipcMain.handle('webdav:connect', async (_e, opts: { url: string; driveLetter: st
   })
 })
 
-ipcMain.handle('webdav:disconnect', async (_e, driveLetter: string) => {
+ipcMain.handle(IPC_WEBDAV_DISCONNECT, async (_e, driveLetter: string) => {
   const servers = loadServers()
   const server = servers.find((s) => s.driveLetter === driveLetter)
   if (server) intentionalDisconnects.add(server.id)
   await disconnectByDriveLetter(driveLetter)
 })
 
-ipcMain.handle('webdav:space', async (_e, driveLetter: string) => {
+ipcMain.handle(IPC_WEBDAV_SPACE, async (_e, driveLetter: string) => {
   return getDriveSpace(driveLetter)
 })
 
-ipcMain.handle('webdav:isConnected', async (_e, driveLetter: string) => {
+ipcMain.handle(IPC_WEBDAV_IS_CONNECTED, async (_e, driveLetter: string) => {
   return existsSync(driveLetter + '\\')
 })
 
-ipcMain.on('webdav:openExplorer', (_e, driveLetter: string) => {
+ipcMain.on(IPC_WEBDAV_OPEN_EXPLORER, (_e, driveLetter: string) => {
   shell.openPath(driveLetter + '\\')
 })
 
-ipcMain.handle('webdav:rename', async (_e, driveLetter: string, name: string) => {
+ipcMain.handle(IPC_WEBDAV_RENAME, async (_e, driveLetter: string, name: string) => {
   const letter = driveLetter.replace(/[^A-Za-z]/g, '')
   const safeName = name.replace(/'/g, "''").replace(/[`$]/g, '')
   execFileCb('powershell.exe', [
@@ -164,37 +184,37 @@ ipcMain.handle('webdav:rename', async (_e, driveLetter: string, name: string) =>
 })
 
 // Store IPC handlers
-ipcMain.handle('store:loadAll', async () => {
+ipcMain.handle(IPC_STORE_LOAD_ALL, async () => {
   return loadServers()
 })
 
-ipcMain.handle('store:save', async (_e, config: ServerConfig) => {
+ipcMain.handle(IPC_STORE_SAVE, async (_e, config: ServerConfig) => {
   saveServer(config)
 })
 
-ipcMain.handle('store:delete', async (_e, id: string) => {
+ipcMain.handle(IPC_STORE_DELETE, async (_e, id: string) => {
   deleteServer(id)
 })
 
-ipcMain.handle('store:clearAll', async () => {
+ipcMain.handle(IPC_STORE_CLEAR_ALL, async () => {
   clearAllServers()
 })
 
 // Updater IPC handlers
-ipcMain.handle('updater:check', () => {
+ipcMain.handle(IPC_UPDATER_CHECK, () => {
   checkForUpdates()
 })
 
-ipcMain.handle('updater:install', () => {
+ipcMain.handle(IPC_UPDATER_INSTALL, () => {
   installUpdate()
 })
 
 // App IPC handlers
-ipcMain.handle('app:getAutoStart', () => {
+ipcMain.handle(IPC_APP_GET_AUTO_START, () => {
   return app.getLoginItemSettings().openAtLogin
 })
 
-ipcMain.handle('app:setAutoStart', (_e, enabled: boolean) => {
+ipcMain.handle(IPC_APP_SET_AUTO_START, (_e, enabled: boolean) => {
   app.setLoginItemSettings({ openAtLogin: enabled })
 })
 
