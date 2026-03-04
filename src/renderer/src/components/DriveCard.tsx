@@ -110,7 +110,12 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
             <>
               <span className="drive-card-name">{name}</span>
               {onRename && (
-                <button className="drive-card-edit-btn" onClick={startEditing} title="Renommer">
+                <button
+                  className="drive-card-edit-btn"
+                  onClick={startEditing}
+                  title="Renommer"
+                  aria-label="Renommer"
+                >
                   <svg
                     aria-hidden="true"
                     width="12"
@@ -158,6 +163,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
               className="drive-action-btn"
               onClick={onOpenExplorer}
               title="Ouvrir dans l'Explorateur"
+              aria-label="Ouvrir dans l'Explorateur"
             >
               <svg
                 aria-hidden="true"
@@ -176,6 +182,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
               onClick={onDisconnect}
               disabled={isBusy}
               title="Déconnecter"
+              aria-label="Déconnecter"
             >
               <svg
                 aria-hidden="true"
@@ -196,6 +203,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
             onClick={onConnect}
             disabled={isBusy}
             title="Connecter"
+            aria-label="Connecter"
           >
             <svg
               aria-hidden="true"
@@ -213,6 +221,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
         {onDelete && (
           <button
             className={`drive-action-btn drive-action-btn--delete${confirmDelete ? ' drive-action-btn--confirm' : ''}`}
+            aria-label={confirmDelete ? 'Confirmer la suppression' : 'Supprimer'}
             onClick={() => {
               if (confirmDelete) {
                 if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)

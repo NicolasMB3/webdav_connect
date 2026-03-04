@@ -47,7 +47,7 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   return (
     <div className="settings">
       <div className="settings-header">
-        <button className="settings-back" onClick={onBack}>
+        <button className="settings-back" onClick={onBack} aria-label="Retour">
           <svg
             width="16"
             height="16"

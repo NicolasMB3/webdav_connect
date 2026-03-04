@@ -70,10 +70,15 @@ export default function LoginDialog({
 
   return (
     <div className="login-overlay">
-      <div className="login-dialog">
+      <div
+        className="login-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-dialog-title"
+      >
         <div className="login-header">
-          <h2>{isEdit ? 'Modifier le serveur' : 'Connexion WebDAV'}</h2>
-          <button className="login-close" onClick={onCancel}>
+          <h2 id="login-dialog-title">{isEdit ? 'Modifier le serveur' : 'Connexion WebDAV'}</h2>
+          <button className="login-close" onClick={onCancel} aria-label="Fermer">
             {'\u00D7'}
           </button>
         </div>

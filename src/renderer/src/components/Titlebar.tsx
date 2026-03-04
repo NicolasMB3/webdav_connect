@@ -16,7 +16,12 @@ export default function Titlebar({ onSettingsClick }: TitlebarProps): React.JSX.
         </div>
       </div>
       <div className="titlebar-controls">
-        <button className="titlebar-btn" onClick={onSettingsClick} title="Paramètres">
+        <button
+          className="titlebar-btn"
+          onClick={onSettingsClick}
+          title="Paramètres"
+          aria-label="Paramètres"
+        >
           <svg
             width="14"
             height="14"
@@ -33,6 +38,7 @@ export default function Titlebar({ onSettingsClick }: TitlebarProps): React.JSX.
           className="titlebar-btn"
           onClick={() => window.api.minimizeWindow()}
           title="Réduire"
+          aria-label="Réduire"
         >
           <svg
             width="14"
@@ -49,6 +55,7 @@ export default function Titlebar({ onSettingsClick }: TitlebarProps): React.JSX.
           className="titlebar-btn titlebar-btn-close"
           onClick={() => window.api.closeWindow()}
           title="Fermer"
+          aria-label="Fermer"
         >
           <svg
             width="14"
