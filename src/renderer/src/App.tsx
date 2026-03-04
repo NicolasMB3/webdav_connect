@@ -37,8 +37,8 @@ function App(): React.JSX.Element {
         if (space) {
           updateServer(id, { usedBytes: space.usedBytes, totalBytes: space.totalBytes })
         }
-      } catch {
-        // Non-critical
+      } catch (err) {
+        console.warn('[App] refreshSpace failed:', err)
       }
     },
     [updateServer]
@@ -78,10 +78,10 @@ function App(): React.JSX.Element {
                     )
                   }
                 })
-                .catch(() => {})
+                .catch((err) => console.warn('[App] getSpace failed:', err))
             }
           })
-          .catch(() => {})
+          .catch((err) => console.warn('[App] isConnected failed:', err))
       }
     })
   }, [])

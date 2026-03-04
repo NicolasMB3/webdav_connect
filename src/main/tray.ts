@@ -6,6 +6,7 @@ import type { ServerConfig } from './store'
 
 const ICON_SIZE = { width: 16, height: 16 }
 const DOT_RADIUS = 3
+const DOT_INSET = 4
 const DOT_COLORS = {
   green: [76, 175, 80] as const,
   orange: [255, 152, 0] as const,
@@ -36,8 +37,8 @@ function createIconWithDot(
   const { width, height } = baseIcon.getSize()
   const bitmap = Buffer.from(baseIcon.toBitmap()) // BGRA format
 
-  const cx = width - 4
-  const cy = height - 4
+  const cx = width - DOT_INSET
+  const cy = height - DOT_INSET
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -104,6 +105,15 @@ export function createTray(
       previousStates.set(server.id, connected)
     }
 
+    // Cleanup stale entries from removed servers
+    const currentIds = new Set(servers.map((s) => s.id))
+    for (const id of previousStates.keys()) {
+      if (!currentIds.has(id)) previousStates.delete(id)
+    }
+    for (const id of lowSpaceNotified) {
+      if (!currentIds.has(id)) lowSpaceNotified.delete(id)
+    }
+
     // F4: Update tray icon based on overall connection status
     const total = servers.length
     const connectedCount = results.filter((r) => r.connected).length
@@ -137,8 +147,8 @@ export function createTray(
               lowSpaceNotified.delete(server.id)
             }
           }
-        } catch {
-          // Non-critical: space check failed
+        } catch (err) {
+          console.warn('[tray] space check failed:', err)
         }
       }
     }

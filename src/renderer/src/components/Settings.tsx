@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import './Settings.css'
 
 interface SettingsProps {
@@ -10,6 +10,8 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [updateStatus, setUpdateStatus] = useState<
     'idle' | 'checking' | 'upToDate' | 'available' | 'downloaded' | 'error'
   >('idle')
+  const [confirmClear, setConfirmClear] = useState(false)
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     window.api.app.getAutoStart().then(setAutoStart)
@@ -22,6 +24,7 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
       unsub2()
       unsub3()
       unsub4()
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
     }
   }, [])
 
@@ -31,7 +34,14 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   }
 
   const handleClearCredentials = async (): Promise<void> => {
-    await window.api.store.clearAll()
+    if (confirmClear) {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+      setConfirmClear(false)
+      await window.api.store.clearAll()
+    } else {
+      setConfirmClear(true)
+      confirmTimerRef.current = setTimeout(() => setConfirmClear(false), 3000)
+    }
   }
 
   return (
@@ -66,8 +76,11 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
 
       <div className="settings-section">
         <h3>Sécurité</h3>
-        <button className="settings-danger-btn" onClick={handleClearCredentials}>
-          Supprimer les identifiants sauvegardés
+        <button
+          className={`settings-danger-btn${confirmClear ? ' settings-danger-btn--confirm' : ''}`}
+          onClick={handleClearCredentials}
+        >
+          {confirmClear ? 'Confirmer la suppression' : 'Supprimer les identifiants sauvegardés'}
         </button>
       </div>
 
@@ -103,7 +116,7 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
         <h3>À propos</h3>
         <div className="settings-about">
           <p>
-            <strong>CMC Drive</strong> v2.0.3
+            <strong>CMC Drive</strong> v{__APP_VERSION__}
           </p>
           <p className="settings-about-desc">Client WebDAV pour NAS CMC-06</p>
         </div>

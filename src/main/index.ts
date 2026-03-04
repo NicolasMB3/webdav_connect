@@ -209,6 +209,8 @@ ipcMain.handle(IPC_STORE_SAVE, async (_e, config: ServerConfig) => {
 
 ipcMain.handle(IPC_STORE_DELETE, async (_e, id: string) => {
   deleteServer(id)
+  intentionalDisconnects.delete(id)
+  lastReconnectAttempts.delete(id)
 })
 
 ipcMain.handle(IPC_STORE_CLEAR_ALL, async () => {
@@ -250,7 +252,9 @@ async function reconnectServers(): Promise<void> {
   await Promise.all(
     toReconnect.map((server) => {
       lastReconnectAttempts.set(server.id, now)
-      return connectServer(server).catch(() => {})
+      return connectServer(server).catch((err) => {
+        console.warn(`[main] reconnect failed for ${server.driveName}:`, err)
+      })
     })
   )
 }
@@ -296,7 +300,13 @@ if (!gotLock) {
     )
 
     if (autoConnectServers.length > 0) {
-      await Promise.all(autoConnectServers.map((server) => connectServer(server).catch(() => {})))
+      await Promise.all(
+        autoConnectServers.map((server) =>
+          connectServer(server).catch((err) => {
+            console.warn(`[main] auto-connect failed for ${server.driveName}:`, err)
+          })
+        )
+      )
     }
   })
 }

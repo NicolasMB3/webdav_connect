@@ -62,7 +62,9 @@ export function setupAutoUpdater(getWindow: () => BrowserWindow | null): void {
   })
 
   const safeCheck = (): void => {
-    autoUpdater.checkForUpdatesAndNotify().catch(() => {})
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.warn('[updater] check failed:', err)
+    })
   }
 
   // Initial check after delay, then periodically
