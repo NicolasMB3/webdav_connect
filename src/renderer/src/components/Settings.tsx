@@ -7,7 +7,9 @@ interface SettingsProps {
 
 export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [autoStart, setAutoStart] = useState(false)
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'upToDate' | 'available' | 'downloaded' | 'error'>('idle')
+  const [updateStatus, setUpdateStatus] = useState<
+    'idle' | 'checking' | 'upToDate' | 'available' | 'downloaded' | 'error'
+  >('idle')
 
   useEffect(() => {
     window.api.app.getAutoStart().then(setAutoStart)
@@ -15,7 +17,12 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
     const unsub2 = window.api.updater.onUpdateAvailable(() => setUpdateStatus('available'))
     const unsub3 = window.api.updater.onUpdateDownloaded(() => setUpdateStatus('downloaded'))
     const unsub4 = window.api.updater.onError(() => setUpdateStatus('error'))
-    return () => { unsub1(); unsub2(); unsub3(); unsub4() }
+    return () => {
+      unsub1()
+      unsub2()
+      unsub3()
+      unsub4()
+    }
   }, [])
 
   const handleAutoStartChange = async (checked: boolean): Promise<void> => {
@@ -31,8 +38,15 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
     <div className="settings">
       <div className="settings-header">
         <button className="settings-back" onClick={onBack}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
         </button>
         <h2>Paramètres</h2>
@@ -42,7 +56,11 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
         <h3>Démarrage</h3>
         <label className="settings-toggle">
           <span>Lancer CMC Drive au démarrage de Windows</span>
-          <input type="checkbox" checked={autoStart} onChange={e => handleAutoStartChange(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={autoStart}
+            onChange={(e) => handleAutoStartChange(e.target.checked)}
+          />
         </label>
       </div>
 
@@ -67,19 +85,26 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
             }
           }}
         >
-          {updateStatus === 'checking' ? 'Vérification...'
-            : updateStatus === 'available' ? 'Téléchargement en cours...'
-            : updateStatus === 'downloaded' ? 'Mise à jour prête — Redémarrer'
-            : updateStatus === 'upToDate' ? 'Vous êtes à jour ✓'
-            : updateStatus === 'error' ? 'Erreur — Réessayer'
-            : 'Vérifier les mises à jour'}
+          {updateStatus === 'checking'
+            ? 'Vérification...'
+            : updateStatus === 'available'
+              ? 'Téléchargement en cours...'
+              : updateStatus === 'downloaded'
+                ? 'Mise à jour prête — Redémarrer'
+                : updateStatus === 'upToDate'
+                  ? 'Vous êtes à jour ✓'
+                  : updateStatus === 'error'
+                    ? 'Erreur — Réessayer'
+                    : 'Vérifier les mises à jour'}
         </button>
       </div>
 
       <div className="settings-section">
         <h3>À propos</h3>
         <div className="settings-about">
-          <p><strong>CMC Drive</strong> v2.0.3</p>
+          <p>
+            <strong>CMC Drive</strong> v2.0.3
+          </p>
           <p className="settings-about-desc">Client WebDAV pour NAS CMC-06</p>
         </div>
       </div>

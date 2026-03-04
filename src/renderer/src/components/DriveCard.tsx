@@ -110,11 +110,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
             <>
               <span className="drive-card-name">{name}</span>
               {onRename && (
-                <button
-                  className="drive-card-edit-btn"
-                  onClick={startEditing}
-                  title="Renommer"
-                >
+                <button className="drive-card-edit-btn" onClick={startEditing} title="Renommer">
                   <svg
                     aria-hidden="true"
                     width="12"

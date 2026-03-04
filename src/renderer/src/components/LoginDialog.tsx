@@ -125,11 +125,7 @@ export default function LoginDialog({
 
           <div className="login-field">
             <label>Mot de passe</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
 
           <div className="login-checkboxes">

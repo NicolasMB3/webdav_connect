@@ -9,14 +9,16 @@ const store = new Store({ name: 'cmc-drive-config' })
 // Migration from old single-connection format
 function migrateIfNeeded(): void {
   if (store.has('connection') && !store.has('servers')) {
-    const old = store.get('connection') as {
-      url: string
-      driveLetter: string
-      username: string
-      password: string
-      autoConnect: boolean
-      driveName: string
-    } | undefined
+    const old = store.get('connection') as
+      | {
+          url: string
+          driveLetter: string
+          username: string
+          password: string
+          autoConnect: boolean
+          driveName: string
+        }
+      | undefined
     if (old) {
       store.set('servers', [
         {
@@ -86,4 +88,3 @@ export function isFirstLaunch(): boolean {
 export function markLaunched(): void {
   store.set('launched', true)
 }
-

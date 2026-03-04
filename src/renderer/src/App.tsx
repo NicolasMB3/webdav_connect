@@ -63,9 +63,7 @@ function App(): React.JSX.Element {
           .then((connected) => {
             if (connected) {
               setServers((prev) =>
-                prev.map((s) =>
-                  s.config.id === config.id ? { ...s, status: 'connected' } : s
-                )
+                prev.map((s) => (s.config.id === config.id ? { ...s, status: 'connected' } : s))
               )
               window.api.webdav
                 .getSpace(config.driveLetter)
@@ -101,9 +99,7 @@ function App(): React.JSX.Element {
     const unsub = window.api.onStatusChanged((serverId, newStatus) => {
       if (newStatus === 'connected') {
         setServers((prev) =>
-          prev.map((s) =>
-            s.config.id === serverId ? { ...s, status: 'connected' } : s
-          )
+          prev.map((s) => (s.config.id === serverId ? { ...s, status: 'connected' } : s))
         )
         // Fetch space outside setState updater
         const server = serversRef.current.find((s) => s.config.id === serverId)
@@ -269,17 +265,13 @@ function App(): React.JSX.Element {
                   totalBytes={server.totalBytes}
                   onConnect={() => handleEdit(server.config.id)}
                   onDisconnect={() => handleDisconnect(server.config.id)}
-                  onOpenExplorer={() =>
-                    window.api.webdav.openExplorer(server.config.driveLetter)
-                  }
+                  onOpenExplorer={() => window.api.webdav.openExplorer(server.config.driveLetter)}
                   onDelete={() => handleDelete(server.config.id)}
                   onRename={async (newName) => {
                     const updatedConfig = { ...server.config, driveName: newName }
                     updateServer(server.config.id, { config: updatedConfig })
                     if (server.status === 'connected') {
-                      window.api.webdav
-                        .rename(server.config.driveLetter, newName)
-                        .catch(() => {})
+                      window.api.webdav.rename(server.config.driveLetter, newName).catch(() => {})
                     }
                     await window.api.store.save(updatedConfig)
                   }}

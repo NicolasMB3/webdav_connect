@@ -2,12 +2,7 @@ import { app, BrowserWindow, ipcMain, Notification, shell, powerMonitor } from '
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { execFile as execFileCb } from 'child_process'
-import {
-  connectDrive,
-  disconnectByDriveLetter,
-  getDriveSpace,
-  killAll
-} from './rclone-manager'
+import { connectDrive, disconnectByDriveLetter, getDriveSpace, killAll } from './rclone-manager'
 import {
   loadServers,
   saveServer,
@@ -142,18 +137,30 @@ ipcMain.on(IPC_NOTIFY, (_e, { title, body }: { title: string; body: string }) =>
 })
 
 // WebDAV IPC handlers
-ipcMain.handle(IPC_WEBDAV_CONNECT, async (_e, opts: { url: string; driveLetter: string; username: string; password: string; driveName?: string }) => {
-  const servers = loadServers()
-  const server = servers.find((s) => s.driveLetter === opts.driveLetter)
-  const serverId = server?.id || Date.now().toString()
-  if (server) intentionalDisconnects.delete(serverId)
-
-  await connectDrive(serverId, opts, (code) => {
-    if (code !== null && code !== 0) {
-      sendStatus(serverId, 'disconnected')
+ipcMain.handle(
+  IPC_WEBDAV_CONNECT,
+  async (
+    _e,
+    opts: {
+      url: string
+      driveLetter: string
+      username: string
+      password: string
+      driveName?: string
     }
-  })
-})
+  ) => {
+    const servers = loadServers()
+    const server = servers.find((s) => s.driveLetter === opts.driveLetter)
+    const serverId = server?.id || Date.now().toString()
+    if (server) intentionalDisconnects.delete(serverId)
+
+    await connectDrive(serverId, opts, (code) => {
+      if (code !== null && code !== 0) {
+        sendStatus(serverId, 'disconnected')
+      }
+    })
+  }
+)
 
 ipcMain.handle(IPC_WEBDAV_DISCONNECT, async (_e, driveLetter: string) => {
   const servers = loadServers()
@@ -177,10 +184,18 @@ ipcMain.on(IPC_WEBDAV_OPEN_EXPLORER, (_e, driveLetter: string) => {
 ipcMain.handle(IPC_WEBDAV_RENAME, async (_e, driveLetter: string, name: string) => {
   const letter = driveLetter.replace(/[^A-Za-z]/g, '')
   const safeName = name.replace(/'/g, "''").replace(/[`$]/g, '')
-  execFileCb('powershell.exe', [
-    '-WindowStyle', 'Hidden', '-NoProfile', '-Command',
-    `Get-ChildItem "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2" | ForEach-Object { New-ItemProperty -Path $_.PSPath -Name '_LabelFromReg' -Value '${safeName}' -Force -ErrorAction SilentlyContinue } | Out-Null`
-  ], { windowsHide: true }, () => {})
+  execFileCb(
+    'powershell.exe',
+    [
+      '-WindowStyle',
+      'Hidden',
+      '-NoProfile',
+      '-Command',
+      `Get-ChildItem "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2" | ForEach-Object { New-ItemProperty -Path $_.PSPath -Name '_LabelFromReg' -Value '${safeName}' -Force -ErrorAction SilentlyContinue } | Out-Null`
+    ],
+    { windowsHide: true },
+    () => {}
+  )
 })
 
 // Store IPC handlers
@@ -281,9 +296,7 @@ if (!gotLock) {
     )
 
     if (autoConnectServers.length > 0) {
-      await Promise.all(
-        autoConnectServers.map((server) => connectServer(server).catch(() => {}))
-      )
+      await Promise.all(autoConnectServers.map((server) => connectServer(server).catch(() => {})))
     }
   })
 }
