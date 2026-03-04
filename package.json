@@ -14,7 +14,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "description": "CMC Drive - WebDAV client for Windows",
   "devDependencies": {
     "@eslint/js": "^9.39.3",
