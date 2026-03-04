@@ -44,3 +44,6 @@
 .drive-action-btn--stop:hover { color: #f87171; border-color: #f8717155; }
 .drive-action-btn--delete { opacity: 0.5; }
 .drive-action-btn--delete:hover { color: #f87171; border-color: #f8717155; opacity: 1; }
+.drive-action-btn--confirm { opacity: 1; width: auto; padding: 0 10px; background: #7f1d1d; border-color: #f87171; color: #f87171; animation: pulse 1s infinite; }
+.drive-action-btn--confirm:hover { background: #991b1b; color: #fff; }
+.drive-action-confirm-text { font-size: 11px; font-weight: 600; white-space: nowrap; }

@@ -1,6 +1,6 @@
 import { spawn, execFile, ChildProcess } from 'child_process';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { app } from 'electron';
 import http from 'http';
 
@@ -38,6 +38,7 @@ interface MountEntry {
   proc: ChildProcess;
   rcPort: number;
   driveLetter: string;
+  remoteSpec: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +203,7 @@ export async function connectDrive(
   });
 
   // Store entry immediately so killAll can find it
-  const entry: MountEntry = { proc, rcPort, driveLetter: opts.driveLetter };
+  const entry: MountEntry = { proc, rcPort, driveLetter: opts.driveLetter, remoteSpec };
   mounts.set(serverId, entry);
 
   // Wire up exit handler
@@ -231,8 +232,19 @@ export async function connectDrive(
       // already dead
     }
     mounts.delete(serverId);
+
+    // Read last lines of rclone log for diagnostics
+    let logTail = '';
+    try {
+      const logContent = readFileSync(logPath, 'utf8');
+      const lines = logContent.split('\n').filter((l) => l.trim());
+      logTail = lines.slice(-5).join('\n');
+    } catch {
+      // Log file may not exist
+    }
+
     throw new Error(
-      `Timeout: rclone mount for ${opts.driveLetter} did not become ready within ${MOUNT_TIMEOUT_MS / 1000}s. Check ${logPath} for details.`
+      `Timeout: rclone mount for ${opts.driveLetter} did not become ready within ${MOUNT_TIMEOUT_MS / 1000}s.${logTail ? `\n\nDernières lignes du log:\n${logTail}` : ` Check ${logPath} for details.`}`
     );
   }
 }
@@ -296,12 +308,19 @@ export async function getDriveSpace(driveLetter: string): Promise<DriveSpace | n
   for (const entry of mounts.values()) {
     if (entry.driveLetter.toUpperCase() === driveLetter.toUpperCase()) {
       try {
-        // operations/about with fs pointing to the mount's drive letter
+        // operations/about with fs pointing to the remote (not the local WinFsp mount)
         const result = await rcPost<{
           total?: number;
           used?: number;
           free?: number;
-        }>(entry.rcPort, 'operations/about', { fs: `${entry.driveLetter}\\` });
+        }>(entry.rcPort, 'operations/about', { fs: entry.remoteSpec });
+
+        // Safety threshold: if total > 500 TB, the server likely doesn't support quotas
+        const MAX_REALISTIC_BYTES = 500 * 1024 ** 4; // 500 TB
+
+        if (result.total != null && result.total > MAX_REALISTIC_BYTES) {
+          return null;
+        }
 
         if (result.total != null && result.used != null) {
           return { usedBytes: result.used, totalBytes: result.total };

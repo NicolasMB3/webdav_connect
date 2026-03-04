@@ -31,7 +31,7 @@ const RECONNECT_COOLDOWN_MS = 30_000
 
 // F2: Track intentionally disconnected servers (via UI) to avoid auto-reconnect
 const intentionalDisconnects = new Set<string>()
-let lastReconnectAttempt = 0
+const lastReconnectAttempts = new Map<string, number>()
 
 // Lazy window creation — window is not created until user interacts
 let mainWindow: BrowserWindow | null = null
@@ -201,18 +201,22 @@ ipcMain.handle('app:setAutoStart', (_e, enabled: boolean) => {
 // F2: Auto-reconnect servers that dropped unexpectedly (with cooldown)
 async function reconnectServers(): Promise<void> {
   const now = Date.now()
-  if (now - lastReconnectAttempt < RECONNECT_COOLDOWN_MS) return
-  lastReconnectAttempt = now
-
   const servers = loadServers()
-  const toReconnect = servers.filter(
-    (s) => s.autoConnect && !intentionalDisconnects.has(s.id) && !existsSync(s.driveLetter + '\\')
-  )
+  const toReconnect = servers.filter((s) => {
+    if (!s.autoConnect || intentionalDisconnects.has(s.id) || existsSync(s.driveLetter + '\\')) {
+      return false
+    }
+    const lastAttempt = lastReconnectAttempts.get(s.id) ?? 0
+    return now - lastAttempt >= RECONNECT_COOLDOWN_MS
+  })
 
   if (toReconnect.length === 0) return
 
   await Promise.all(
-    toReconnect.map((server) => connectServer(server).catch(() => {}))
+    toReconnect.map((server) => {
+      lastReconnectAttempts.set(server.id, now)
+      return connectServer(server).catch(() => {})
+    })
   )
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import './DriveCard.css'
 
 export type DriveStatus = 'connected' | 'disconnected' | 'connecting' | 'disconnecting'
@@ -18,10 +18,10 @@ interface DriveCardProps {
 }
 
 function formatSize(bytes: number): string {
-  if (bytes >= 1e12) return (bytes / 1e12).toFixed(2) + ' TB'
-  if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + ' GB'
-  if (bytes >= 1e6) return (bytes / 1e6).toFixed(2) + ' MB'
-  return (bytes / 1e3).toFixed(2) + ' KB'
+  if (bytes >= 1e12) return (bytes / 1e12).toFixed(2) + ' To'
+  if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + ' Go'
+  if (bytes >= 1e6) return (bytes / 1e6).toFixed(2) + ' Mo'
+  return (bytes / 1e3).toFixed(2) + ' Ko'
 }
 
 export default function DriveCard(props: DriveCardProps): React.JSX.Element {
@@ -47,7 +47,15 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
 
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(name)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+    }
+  }, [])
 
   const startEditing = (): void => {
     setEditName(name)
@@ -208,22 +216,35 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
         )}
         {onDelete && (
           <button
-            className="drive-action-btn drive-action-btn--delete"
-            onClick={onDelete}
-            title="Supprimer"
+            className={`drive-action-btn drive-action-btn--delete${confirmDelete ? ' drive-action-btn--confirm' : ''}`}
+            onClick={() => {
+              if (confirmDelete) {
+                if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+                setConfirmDelete(false)
+                onDelete()
+              } else {
+                setConfirmDelete(true)
+                confirmTimerRef.current = setTimeout(() => setConfirmDelete(false), 3000)
+              }
+            }}
+            title={confirmDelete ? 'Confirmer la suppression' : 'Supprimer'}
           >
-            <svg
-              aria-hidden="true"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-            </svg>
+            {confirmDelete ? (
+              <span className="drive-action-confirm-text">Confirmer</span>
+            ) : (
+              <svg
+                aria-hidden="true"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+              </svg>
+            )}
           </button>
         )}
       </div>

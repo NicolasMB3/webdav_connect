@@ -22,6 +22,10 @@ interface LoginDialogProps {
 
 const ALL_DRIVE_LETTERS = 'DEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => l + ':')
 
+function isValidUrl(value: string): boolean {
+  return /^https?:\/\/.+/.test(value.trim())
+}
+
 export default function LoginDialog({
   server,
   defaultUrl,
@@ -82,6 +86,9 @@ export default function LoginDialog({
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://serveur:port/chemin"
             />
+            {url.trim() && !isValidUrl(url) && (
+              <span className="login-field-hint">L'URL doit commencer par http:// ou https://</span>
+            )}
           </div>
 
           <div className="login-field">
@@ -150,7 +157,7 @@ export default function LoginDialog({
             <button
               type="submit"
               className="login-btn login-btn--connect"
-              disabled={!username || !password}
+              disabled={!username || !password || !isValidUrl(url)}
             >
               {isEdit ? 'Enregistrer' : 'Connecter'}
             </button>

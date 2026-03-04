@@ -37,3 +37,4 @@
 .login-btn--connect { background: #4a9eff; color: #fff; }
 .login-btn--connect:hover { background: #3a8eef; }
 .login-btn--connect:disabled { opacity: 0.4; cursor: not-allowed; }
+.login-field-hint { display: block; font-size: 11px; color: #f59e0b; margin-top: 4px; }

@@ -1,3 +1,5 @@
+declare const __APP_VERSION__: string
+
 interface ServerConfig {
   id: string
   url: string
