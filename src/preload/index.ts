@@ -1,17 +1,12 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
+import type { ConnectOptions, ServerConfig } from '../shared/types'
 
 contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   closeWindow: () => ipcRenderer.send('window:close'),
   webdav: {
-    connect: (opts: {
-      url: string
-      driveLetter: string
-      username: string
-      password: string
-      driveName?: string
-    }) => ipcRenderer.invoke('webdav:connect', opts),
+    connect: (opts: ConnectOptions) => ipcRenderer.invoke('webdav:connect', opts),
     disconnect: (driveLetter: string) => ipcRenderer.invoke('webdav:disconnect', driveLetter),
     getSpace: (driveLetter: string) => ipcRenderer.invoke('webdav:space', driveLetter),
     isConnected: (driveLetter: string) => ipcRenderer.invoke('webdav:isConnected', driveLetter),
@@ -21,15 +16,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   store: {
     loadAll: () => ipcRenderer.invoke('store:loadAll'),
-    save: (config: {
-      id: string
-      url: string
-      driveLetter: string
-      username: string
-      password: string
-      autoConnect: boolean
-      driveName: string
-    }) => ipcRenderer.invoke('store:save', config),
+    save: (config: ServerConfig) => ipcRenderer.invoke('store:save', config),
     delete: (id: string) => ipcRenderer.invoke('store:delete', id),
     clearAll: () => ipcRenderer.invoke('store:clearAll')
   },

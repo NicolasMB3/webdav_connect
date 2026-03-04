@@ -12,10 +12,14 @@
     "resolveJsonModule": true,
     "outDir": "./out/renderer",
     "declaration": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@shared/*": ["./src/shared/*"]
+    }
   },
   "include": [
     "src/renderer/src/**/*.ts",
-    "src/renderer/src/**/*.tsx"
+    "src/renderer/src/**/*.tsx",
+    "src/shared/**/*.ts"
   ]
 }

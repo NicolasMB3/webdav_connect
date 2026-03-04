@@ -1,17 +1,10 @@
 import Store from 'electron-store'
 import { safeStorage } from 'electron'
+import type { ServerConfig } from '../shared/types'
+
+export type { ServerConfig }
 
 const store = new Store({ name: 'cmc-drive-config' })
-
-export interface ServerConfig {
-  id: string
-  url: string
-  driveLetter: string
-  username: string
-  password: string
-  autoConnect: boolean
-  driveName: string
-}
 
 // Migration from old single-connection format
 function migrateIfNeeded(): void {

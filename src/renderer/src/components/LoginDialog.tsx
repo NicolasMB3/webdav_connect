@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import type { ServerConfig } from '@shared/types'
 import './LoginDialog.css'
 
 interface LoginDialogProps {

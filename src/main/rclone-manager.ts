@@ -3,6 +3,7 @@ import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { app } from 'electron';
 import http from 'http';
+import type { ConnectOptions, DriveSpace } from '../shared/types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -12,23 +13,6 @@ const RC_PORT_BASE = 5572;
 const MOUNT_TIMEOUT_MS = 30_000;
 const MOUNT_POLL_INTERVAL_MS = 500;
 const DEFAULT_VOLNAME = 'CMC Drive';
-
-// ---------------------------------------------------------------------------
-// Interfaces
-// ---------------------------------------------------------------------------
-
-interface ConnectOptions {
-  url: string;
-  driveLetter: string;
-  username: string;
-  password: string;
-  driveName?: string;
-}
-
-interface DriveSpace {
-  usedBytes: number;
-  totalBytes: number;
-}
 
 // ---------------------------------------------------------------------------
 // Internal types
