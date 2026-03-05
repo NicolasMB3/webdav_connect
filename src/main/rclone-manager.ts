@@ -1,4 +1,4 @@
-import { spawn, execFile, ChildProcess } from 'child_process'
+import { spawn, execFile, execFileSync, ChildProcess } from 'child_process'
 import { join } from 'path'
 import { readFileSync } from 'fs'
 import { app } from 'electron'
@@ -20,9 +20,9 @@ const DEFAULT_VOLNAME = 'CMC Drive'
 // ---------------------------------------------------------------------------
 
 interface MountEntry {
-  proc: ChildProcess
+  proc: ChildProcess | null // null for macOS native mounts
   rcPort: number
-  mountPoint: string
+  mountPoint: string // Actual mount point (may differ from configured on macOS)
   remoteSpec: string
 }
 
@@ -33,6 +33,21 @@ interface MountEntry {
 const mounts = new Map<string, MountEntry>()
 let nextRcPort = RC_PORT_BASE
 
+// Map configured mount point → actual mount point (macOS native mounts)
+const mountPointMap = new Map<string, string>()
+
+// ---------------------------------------------------------------------------
+// Public: mount point resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a configured mount point to its actual path.
+ * On macOS with native WebDAV mounts, the actual path may differ from configured.
+ */
+export function resolveMount(mountPoint: string): string {
+  return mountPointMap.get(mountPoint) || mountPoint
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -41,10 +56,6 @@ function getLogDir(): string {
   return app.getPath('userData')
 }
 
-/**
- * Call `rclone obscure <password>` to produce the obscured token
- * required by on-the-fly remote syntax.
- */
 function obscurePassword(password: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -59,16 +70,10 @@ function obscurePassword(password: string): Promise<string> {
   })
 }
 
-/**
- * Allocate the next RC port and bump the counter.
- */
 function allocatePort(): number {
   return nextRcPort++
 }
 
-/**
- * Make an HTTP POST request to the rclone RC API.
- */
 function rcPost<T = unknown>(
   port: number,
   endpoint: string,
@@ -107,9 +112,6 @@ function rcPost<T = unknown>(
   })
 }
 
-/**
- * Run a PowerShell command and return its stdout.
- */
 function runPowershell(command: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -124,9 +126,6 @@ function runPowershell(command: string): Promise<string> {
   })
 }
 
-/**
- * Run `df -k <mountPoint>` on macOS and parse the output.
- */
 function runDf(mountPoint: string): Promise<{ usedBytes: number; totalBytes: number } | null> {
   return new Promise((resolve) => {
     execFile('df', ['-k', mountPoint], { encoding: 'utf8' }, (err, stdout) => {
@@ -140,7 +139,6 @@ function runDf(mountPoint: string): Promise<{ usedBytes: number; totalBytes: num
         return
       }
       const parts = lines[1].split(/\s+/)
-      // df -k columns: Filesystem 1K-blocks Used Available Capacity ...
       const totalKB = parseInt(parts[1], 10)
       const usedKB = parseInt(parts[2], 10)
       if (isNaN(totalKB) || isNaN(usedKB)) {
@@ -152,11 +150,87 @@ function runDf(mountPoint: string): Promise<{ usedBytes: number; totalBytes: num
   })
 }
 
-/**
- * Sleep helper.
- */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// ---------------------------------------------------------------------------
+// macOS native WebDAV mount via osascript
+// ---------------------------------------------------------------------------
+
+/**
+ * Escape a string for use inside AppleScript double-quoted strings.
+ */
+function escapeAppleScript(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/**
+ * Mount a WebDAV share using macOS native mount via osascript.
+ * Returns the POSIX path of the actual mount point.
+ */
+function mountNativeWebDav(url: string, username: string, password: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const script = [
+      `set vol to mount volume "${escapeAppleScript(url)}" as user name "${escapeAppleScript(username)}" with password "${escapeAppleScript(password)}"`,
+      'return POSIX path of vol'
+    ].join('\n')
+
+    // Use stdin to avoid credentials in ps output
+    const proc = spawn('osascript', [], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString()
+    })
+    proc.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString()
+    })
+
+    const timeout = setTimeout(() => {
+      proc.kill()
+      reject(new Error('Timeout: le montage WebDAV natif a pris trop de temps (30s).'))
+    }, MOUNT_TIMEOUT_MS)
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout)
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `osascript exited with code ${code}`))
+      } else {
+        const mountPath = stdout.trim().replace(/\/+$/, '')
+        if (!mountPath) {
+          reject(new Error('mount volume returned empty path'))
+        } else {
+          resolve(mountPath)
+        }
+      }
+    })
+
+    proc.stdin.write(script)
+    proc.stdin.end()
+  })
+}
+
+/**
+ * Unmount a macOS native mount via diskutil.
+ */
+function unmountNative(mountPoint: string): Promise<void> {
+  return new Promise((resolve) => {
+    execFile('diskutil', ['unmount', mountPoint], { timeout: 10_000 }, (err) => {
+      if (err) {
+        // Try force unmount
+        execFile('diskutil', ['unmount', 'force', mountPoint], { timeout: 10_000 }, () => {
+          resolve()
+        })
+      } else {
+        resolve()
+      }
+    })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -164,9 +238,7 @@ function sleep(ms: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Spawn an rclone mount process for the given server, wait for the mount
- * to become available via the RC API (polling mount/listmounts every 500ms,
- * up to 30s).
+ * Connect a drive. On macOS uses native WebDAV mount, on Windows uses rclone.
  */
 export async function connectDrive(
   serverId: string,
@@ -178,21 +250,50 @@ export async function connectDrive(
     await disconnectDrive(serverId)
   }
 
-  // Obscure the password for rclone's on-the-fly remote syntax
+  if (IS_MAC) {
+    return connectDriveMac(serverId, opts)
+  }
+
+  return connectDriveWindows(serverId, opts, onExit)
+}
+
+/**
+ * macOS: mount WebDAV natively via osascript (no FUSE/NFS/rclone needed).
+ */
+async function connectDriveMac(serverId: string, opts: ConnectOptions): Promise<void> {
+  const actualMount = await mountNativeWebDav(opts.url, opts.username, opts.password)
+
+  mounts.set(serverId, {
+    proc: null,
+    rcPort: 0,
+    mountPoint: actualMount,
+    remoteSpec: ''
+  })
+
+  // Track mapping if actual mount point differs from configured
+  if (actualMount !== opts.mountPoint) {
+    mountPointMap.set(opts.mountPoint, actualMount)
+  }
+}
+
+/**
+ * Windows: mount via rclone with WinFsp FUSE.
+ */
+async function connectDriveWindows(
+  serverId: string,
+  opts: ConnectOptions,
+  onExit?: (code: number | null) => void
+): Promise<void> {
   const obscured = await obscurePassword(opts.password)
 
   const rcPort = allocatePort()
   const logPath = join(getLogDir(), `rclone-${serverId}.log`)
   const volname = opts.driveName || DEFAULT_VOLNAME
 
-  // On-the-fly remote: :webdav,url="...",user="...",pass="...": MOUNT_POINT
   const remoteSpec = `:webdav,url="${opts.url}",user="${opts.username}",pass="${obscured}":`
 
-  // Use nfsmount on macOS (no FUSE dependency), regular mount on Windows
-  const mountCmd = IS_MAC ? 'nfsmount' : 'mount'
-
   const args = [
-    mountCmd,
+    'mount',
     remoteSpec,
     opts.mountPoint,
     '--vfs-cache-mode',
@@ -207,6 +308,8 @@ export async function connectDrive(
     '5m',
     '--attr-timeout',
     '1s',
+    '--volname',
+    volname,
     '--rc',
     '--rc-addr',
     `127.0.0.1:${rcPort}`,
@@ -214,32 +317,25 @@ export async function connectDrive(
     '--log-file',
     logPath,
     '--log-level',
-    'INFO'
+    'INFO',
+    '--vfs-case-insensitive',
+    '--network-mode'
   ]
-
-  // Windows-only flags (FUSE-based mount)
-  if (IS_WIN) {
-    args.push('--volname', volname)
-    args.push('--vfs-case-insensitive')
-    args.push('--network-mode')
-  }
 
   const proc = spawn(getRclonePath(), args, {
     windowsHide: true,
     stdio: 'ignore'
   })
 
-  // Store entry immediately so killAll can find it
   const entry: MountEntry = { proc, rcPort, mountPoint: opts.mountPoint, remoteSpec }
   mounts.set(serverId, entry)
 
-  // Wire up exit handler
   proc.on('exit', (code) => {
     mounts.delete(serverId)
     onExit?.(code)
   })
 
-  // Poll filesystem until the mount point appears (500ms intervals, 30s timeout)
+  // Poll filesystem until the mount point appears
   const deadline = Date.now() + MOUNT_TIMEOUT_MS
   let ready = false
 
@@ -252,7 +348,6 @@ export async function connectDrive(
   }
 
   if (!ready) {
-    // Cleanup the failed mount
     try {
       proc.kill()
     } catch {
@@ -260,7 +355,6 @@ export async function connectDrive(
     }
     mounts.delete(serverId)
 
-    // Read last lines of rclone log for diagnostics
     let logTail = ''
     try {
       const logContent = readFileSync(logPath, 'utf8')
@@ -278,30 +372,40 @@ export async function connectDrive(
 
 /**
  * Disconnect a mount by server ID.
- * Tries the RC API first (mount/unmount then core/quit), falls back to process.kill().
  */
 async function disconnectDrive(serverId: string): Promise<void> {
   const entry = mounts.get(serverId)
   if (!entry) return
 
-  // Try graceful unmount via RC API
+  if (!entry.proc) {
+    // macOS native mount — unmount via diskutil
+    await unmountNative(entry.mountPoint)
+    // Clean up mount point mapping
+    for (const [key, val] of mountPointMap) {
+      if (val === entry.mountPoint) {
+        mountPointMap.delete(key)
+        break
+      }
+    }
+    mounts.delete(serverId)
+    return
+  }
+
+  // rclone-based mount (Windows) — RC API then kill
   try {
     await rcPost(entry.rcPort, 'mount/unmount', { mountPoint: entry.mountPoint })
   } catch {
     // RC API may already be down
   }
 
-  // Try graceful quit via RC API
   try {
     await rcPost(entry.rcPort, 'core/quit')
   } catch {
     // RC API may already be down
   }
 
-  // Give the process a moment to exit gracefully
   await sleep(500)
 
-  // Force kill if still alive
   try {
     if (!entry.proc.killed) {
       entry.proc.kill()
@@ -317,8 +421,9 @@ async function disconnectDrive(serverId: string): Promise<void> {
  * Find a mount by its mount point and disconnect it.
  */
 export async function disconnectByMountPoint(mountPoint: string): Promise<void> {
+  const resolved = resolveMount(mountPoint)
   for (const [serverId, entry] of mounts) {
-    if (entry.mountPoint.toUpperCase() === mountPoint.toUpperCase()) {
+    if (entry.mountPoint.toUpperCase() === resolved.toUpperCase()) {
       await disconnectDrive(serverId)
       return
     }
@@ -327,36 +432,37 @@ export async function disconnectByMountPoint(mountPoint: string): Promise<void> 
 
 /**
  * Get disk space for a mount point.
- * Tries the RC API `operations/about` first (using the mount's remote path),
- * then falls back to PowerShell `Get-PSDrive` (Win) or `df -k` (Mac).
  */
 export async function getDriveSpace(mountPoint: string): Promise<DriveSpace | null> {
-  // Find the mount entry by mount point to use RC API
+  const resolved = resolveMount(mountPoint)
+
+  // Find the mount entry to use RC API (Windows/rclone only)
   for (const entry of mounts.values()) {
-    if (entry.mountPoint.toUpperCase() === mountPoint.toUpperCase()) {
-      try {
-        // operations/about with fs pointing to the remote (not the local WinFsp mount)
-        const result = await rcPost<{
-          total?: number
-          used?: number
-          free?: number
-        }>(entry.rcPort, 'operations/about', { fs: entry.remoteSpec })
+    if (entry.mountPoint.toUpperCase() === resolved.toUpperCase()) {
+      // Only try RC API for rclone-based mounts
+      if (entry.proc && entry.rcPort) {
+        try {
+          const result = await rcPost<{
+            total?: number
+            used?: number
+            free?: number
+          }>(entry.rcPort, 'operations/about', { fs: entry.remoteSpec })
 
-        // Safety threshold: if total > 500 TB, the server likely doesn't support quotas
-        const MAX_REALISTIC_BYTES = 500 * 1024 ** 4 // 500 TB
+          const MAX_REALISTIC_BYTES = 500 * 1024 ** 4 // 500 TB
 
-        if (result.total != null && result.total > MAX_REALISTIC_BYTES) {
-          return null
-        }
+          if (result.total != null && result.total > MAX_REALISTIC_BYTES) {
+            return null
+          }
 
-        if (result.total != null && result.used != null) {
-          return { usedBytes: result.used, totalBytes: result.total }
+          if (result.total != null && result.used != null) {
+            return { usedBytes: result.used, totalBytes: result.total }
+          }
+          if (result.total != null && result.free != null) {
+            return { usedBytes: result.total - result.free, totalBytes: result.total }
+          }
+        } catch {
+          // RC API failed, fall through to OS fallback
         }
-        if (result.total != null && result.free != null) {
-          return { usedBytes: result.total - result.free, totalBytes: result.total }
-        }
-      } catch {
-        // RC API failed, fall through to OS fallback
       }
       break
     }
@@ -365,7 +471,7 @@ export async function getDriveSpace(mountPoint: string): Promise<DriveSpace | nu
   // Fallback: OS-specific disk space query
   if (IS_WIN) {
     try {
-      const letter = mountPoint.replace(':', '')
+      const letter = resolved.replace(':', '')
       const result = await runPowershell(
         `Get-PSDrive ${letter} | Select-Object Used,Free | ConvertTo-Json`
       )
@@ -381,7 +487,7 @@ export async function getDriveSpace(mountPoint: string): Promise<DriveSpace | nu
 
   if (IS_MAC) {
     try {
-      return await runDf(mountPoint)
+      return await runDf(resolved)
     } catch {
       return null
     }
@@ -391,17 +497,27 @@ export async function getDriveSpace(mountPoint: string): Promise<DriveSpace | nu
 }
 
 /**
- * Kill all rclone processes immediately (for app quit).
+ * Kill all mount processes / unmount all native mounts (for app quit).
  */
 export function killAll(): void {
   for (const entry of mounts.values()) {
-    try {
-      if (!entry.proc.killed) {
-        entry.proc.kill()
+    if (entry.proc) {
+      try {
+        if (!entry.proc.killed) {
+          entry.proc.kill()
+        }
+      } catch {
+        // Already dead
       }
-    } catch {
-      // Already dead
+    } else if (IS_MAC) {
+      // macOS native mount — unmount synchronously
+      try {
+        execFileSync('diskutil', ['unmount', entry.mountPoint], { timeout: 5_000 })
+      } catch {
+        // Already unmounted
+      }
     }
   }
   mounts.clear()
+  mountPointMap.clear()
 }

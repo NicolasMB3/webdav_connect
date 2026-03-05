@@ -1,6 +1,12 @@
 import { app, BrowserWindow, ipcMain, Notification, shell, powerMonitor } from 'electron'
 import { join } from 'path'
-import { connectDrive, disconnectByMountPoint, getDriveSpace, killAll } from './rclone-manager'
+import {
+  connectDrive,
+  disconnectByMountPoint,
+  getDriveSpace,
+  killAll,
+  resolveMount
+} from './rclone-manager'
 import {
   loadServers,
   saveServer,
@@ -166,11 +172,11 @@ ipcMain.handle(IPC_WEBDAV_SPACE, async (_e, mountPoint: string) => {
 })
 
 ipcMain.handle(IPC_WEBDAV_IS_CONNECTED, async (_e, mountPoint: string) => {
-  return isMountReady(mountPoint)
+  return isMountReady(resolveMount(mountPoint))
 })
 
 ipcMain.on(IPC_WEBDAV_OPEN_EXPLORER, (_e, mountPoint: string) => {
-  shell.openPath(mountPathForOpen(mountPoint))
+  shell.openPath(mountPathForOpen(resolveMount(mountPoint)))
 })
 
 ipcMain.handle(IPC_WEBDAV_RENAME, async (_e, mountPoint: string, name: string) => {
@@ -234,7 +240,7 @@ async function reconnectServers(): Promise<void> {
   const now = Date.now()
   const servers = loadServers()
   const toReconnect = servers.filter((s) => {
-    if (!s.autoConnect || intentionalDisconnects.has(s.id) || isMountReady(s.mountPoint)) {
+    if (!s.autoConnect || intentionalDisconnects.has(s.id) || isMountReady(resolveMount(s.mountPoint))) {
       return false
     }
     const lastAttempt = lastReconnectAttempts.get(s.id) ?? 0
@@ -292,7 +298,7 @@ if (!gotLock) {
     // Auto-connect on startup for all servers with autoConnect enabled
     const servers = loadServers()
     const autoConnectServers = servers.filter(
-      (s) => s.autoConnect && !isMountReady(s.mountPoint)
+      (s) => s.autoConnect && !isMountReady(resolveMount(s.mountPoint))
     )
 
     if (autoConnectServers.length > 0) {
