@@ -1,9 +1,10 @@
 import { spawn, execFile, ChildProcess } from 'child_process'
 import { join } from 'path'
-import { existsSync, readFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import { app } from 'electron'
 import http from 'http'
 import type { ConnectOptions, DriveSpace } from '../shared/types'
+import { getRclonePath, isMountReady, IS_WIN, IS_MAC, checkFuseAvailable } from './platform'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -21,7 +22,7 @@ const DEFAULT_VOLNAME = 'CMC Drive'
 interface MountEntry {
   proc: ChildProcess
   rcPort: number
-  driveLetter: string
+  mountPoint: string
   remoteSpec: string
 }
 
@@ -35,13 +36,6 @@ let nextRcPort = RC_PORT_BASE
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getRclonePath(): string {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'resources', 'rclone.exe')
-  }
-  return join(__dirname, '../../resources/rclone.exe')
-}
 
 function getLogDir(): string {
   return app.getPath('userData')
@@ -131,6 +125,34 @@ function runPowershell(command: string): Promise<string> {
 }
 
 /**
+ * Run `df -k <mountPoint>` on macOS and parse the output.
+ */
+function runDf(mountPoint: string): Promise<{ usedBytes: number; totalBytes: number } | null> {
+  return new Promise((resolve) => {
+    execFile('df', ['-k', mountPoint], { encoding: 'utf8' }, (err, stdout) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+      const lines = stdout.trim().split('\n')
+      if (lines.length < 2) {
+        resolve(null)
+        return
+      }
+      const parts = lines[1].split(/\s+/)
+      // df -k columns: Filesystem 1K-blocks Used Available Capacity ...
+      const totalKB = parseInt(parts[1], 10)
+      const usedKB = parseInt(parts[2], 10)
+      if (isNaN(totalKB) || isNaN(usedKB)) {
+        resolve(null)
+        return
+      }
+      resolve({ usedBytes: usedKB * 1024, totalBytes: totalKB * 1024 })
+    })
+  })
+}
+
+/**
  * Sleep helper.
  */
 function sleep(ms: number): Promise<void> {
@@ -144,13 +166,16 @@ function sleep(ms: number): Promise<void> {
 /**
  * Spawn an rclone mount process for the given server, wait for the mount
  * to become available via the RC API (polling mount/listmounts every 500ms,
- * up to 15s).
+ * up to 30s).
  */
 export async function connectDrive(
   serverId: string,
   opts: ConnectOptions,
   onExit?: (code: number | null) => void
 ): Promise<void> {
+  // Check FUSE availability on macOS
+  await checkFuseAvailable()
+
   // If already mounted, disconnect first
   if (mounts.has(serverId)) {
     await disconnectDrive(serverId)
@@ -163,13 +188,13 @@ export async function connectDrive(
   const logPath = join(getLogDir(), `rclone-${serverId}.log`)
   const volname = opts.driveName || DEFAULT_VOLNAME
 
-  // On-the-fly remote: :webdav,url="...",user="...",pass="...": DRIVE_LETTER
+  // On-the-fly remote: :webdav,url="...",user="...",pass="...": MOUNT_POINT
   const remoteSpec = `:webdav,url="${opts.url}",user="${opts.username}",pass="${obscured}":`
 
   const args = [
     'mount',
     remoteSpec,
-    opts.driveLetter,
+    opts.mountPoint,
     '--vfs-cache-mode',
     'full',
     '--vfs-cache-max-size',
@@ -182,7 +207,6 @@ export async function connectDrive(
     '5m',
     '--attr-timeout',
     '1s',
-    '--vfs-case-insensitive',
     '--volname',
     volname,
     '--rc',
@@ -195,13 +219,19 @@ export async function connectDrive(
     'INFO'
   ]
 
+  // Windows-only flags
+  if (IS_WIN) {
+    args.push('--vfs-case-insensitive')
+    args.push('--network-mode')
+  }
+
   const proc = spawn(getRclonePath(), args, {
     windowsHide: true,
     stdio: 'ignore'
   })
 
   // Store entry immediately so killAll can find it
-  const entry: MountEntry = { proc, rcPort, driveLetter: opts.driveLetter, remoteSpec }
+  const entry: MountEntry = { proc, rcPort, mountPoint: opts.mountPoint, remoteSpec }
   mounts.set(serverId, entry)
 
   // Wire up exit handler
@@ -210,13 +240,13 @@ export async function connectDrive(
     onExit?.(code)
   })
 
-  // Poll filesystem until the drive letter appears (500ms intervals, 30s timeout)
+  // Poll filesystem until the mount point appears (500ms intervals, 30s timeout)
   const deadline = Date.now() + MOUNT_TIMEOUT_MS
   let ready = false
 
   while (Date.now() < deadline) {
     await sleep(MOUNT_POLL_INTERVAL_MS)
-    if (existsSync(opts.driveLetter + '\\')) {
+    if (isMountReady(opts.mountPoint)) {
       ready = true
       break
     }
@@ -242,7 +272,7 @@ export async function connectDrive(
     }
 
     throw new Error(
-      `Timeout: rclone mount for ${opts.driveLetter} did not become ready within ${MOUNT_TIMEOUT_MS / 1000}s.${logTail ? `\n\nDernières lignes du log:\n${logTail}` : ` Check ${logPath} for details.`}`
+      `Timeout: rclone mount for ${opts.mountPoint} did not become ready within ${MOUNT_TIMEOUT_MS / 1000}s.${logTail ? `\n\nDernières lignes du log:\n${logTail}` : ` Check ${logPath} for details.`}`
     )
   }
 }
@@ -257,7 +287,7 @@ async function disconnectDrive(serverId: string): Promise<void> {
 
   // Try graceful unmount via RC API
   try {
-    await rcPost(entry.rcPort, 'mount/unmount', { mountPoint: entry.driveLetter })
+    await rcPost(entry.rcPort, 'mount/unmount', { mountPoint: entry.mountPoint })
   } catch {
     // RC API may already be down
   }
@@ -285,11 +315,11 @@ async function disconnectDrive(serverId: string): Promise<void> {
 }
 
 /**
- * Find a mount by its drive letter and disconnect it.
+ * Find a mount by its mount point and disconnect it.
  */
-export async function disconnectByDriveLetter(driveLetter: string): Promise<void> {
+export async function disconnectByMountPoint(mountPoint: string): Promise<void> {
   for (const [serverId, entry] of mounts) {
-    if (entry.driveLetter.toUpperCase() === driveLetter.toUpperCase()) {
+    if (entry.mountPoint.toUpperCase() === mountPoint.toUpperCase()) {
       await disconnectDrive(serverId)
       return
     }
@@ -297,14 +327,14 @@ export async function disconnectByDriveLetter(driveLetter: string): Promise<void
 }
 
 /**
- * Get disk space for a drive letter.
+ * Get disk space for a mount point.
  * Tries the RC API `operations/about` first (using the mount's remote path),
- * then falls back to PowerShell `Get-PSDrive`.
+ * then falls back to PowerShell `Get-PSDrive` (Win) or `df -k` (Mac).
  */
-export async function getDriveSpace(driveLetter: string): Promise<DriveSpace | null> {
-  // Find the mount entry by drive letter to use RC API
+export async function getDriveSpace(mountPoint: string): Promise<DriveSpace | null> {
+  // Find the mount entry by mount point to use RC API
   for (const entry of mounts.values()) {
-    if (entry.driveLetter.toUpperCase() === driveLetter.toUpperCase()) {
+    if (entry.mountPoint.toUpperCase() === mountPoint.toUpperCase()) {
       try {
         // operations/about with fs pointing to the remote (not the local WinFsp mount)
         const result = await rcPost<{
@@ -327,26 +357,38 @@ export async function getDriveSpace(driveLetter: string): Promise<DriveSpace | n
           return { usedBytes: result.total - result.free, totalBytes: result.total }
         }
       } catch {
-        // RC API failed, fall through to PowerShell
+        // RC API failed, fall through to OS fallback
       }
       break
     }
   }
 
-  // Fallback: PowerShell Get-PSDrive
-  try {
-    const letter = driveLetter.replace(':', '')
-    const result = await runPowershell(
-      `Get-PSDrive ${letter} | Select-Object Used,Free | ConvertTo-Json`
-    )
-    const data = JSON.parse(result.trim())
-    if (data.Used != null && data.Free != null) {
-      return { usedBytes: data.Used, totalBytes: data.Used + data.Free }
+  // Fallback: OS-specific disk space query
+  if (IS_WIN) {
+    try {
+      const letter = mountPoint.replace(':', '')
+      const result = await runPowershell(
+        `Get-PSDrive ${letter} | Select-Object Used,Free | ConvertTo-Json`
+      )
+      const data = JSON.parse(result.trim())
+      if (data.Used != null && data.Free != null) {
+        return { usedBytes: data.Used, totalBytes: data.Used + data.Free }
+      }
+      return null
+    } catch {
+      return null
     }
-    return null
-  } catch {
-    return null
   }
+
+  if (IS_MAC) {
+    try {
+      return await runDf(mountPoint)
+    } catch {
+      return null
+    }
+  }
+
+  return null
 }
 
 /**

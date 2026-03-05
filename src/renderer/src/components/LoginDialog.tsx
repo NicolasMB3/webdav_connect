@@ -2,16 +2,18 @@ import React, { useState } from 'react'
 import type { ServerConfig } from '@shared/types'
 import './LoginDialog.css'
 
+const IS_MAC = window.api.platform === 'darwin'
+
 interface LoginDialogProps {
   server?: ServerConfig
   defaultUrl: string
-  defaultDriveLetter: string
+  defaultMountPoint: string
   defaultDriveName: string
-  usedDriveLetters: string[]
+  usedMountPoints: string[]
   onSubmit: (data: {
     id?: string
     url: string
-    driveLetter: string
+    mountPoint: string
     username: string
     password: string
     remember: boolean
@@ -27,27 +29,34 @@ function isValidUrl(value: string): boolean {
   return /^https?:\/\/.+/.test(value.trim())
 }
 
+function isValidMountPoint(value: string): boolean {
+  if (IS_MAC) return value.trim().startsWith('/')
+  return /^[A-Za-z]:$/.test(value.trim())
+}
+
 export default function LoginDialog({
   server,
   defaultUrl,
-  defaultDriveLetter,
+  defaultMountPoint,
   defaultDriveName,
-  usedDriveLetters,
+  usedMountPoints,
   onSubmit,
   onCancel
 }: LoginDialogProps): React.JSX.Element {
   const isEdit = !!server
-  // When editing, the server's own letter is available; exclude all others
-  const ownLetter = server?.driveLetter
+  // When editing, the server's own mount point is available; exclude all others
+  const ownMountPoint = server?.mountPoint
   const availableLetters = ALL_DRIVE_LETTERS.filter(
-    (l) => l === ownLetter || !usedDriveLetters.includes(l)
+    (l) => l === ownMountPoint || !usedMountPoints.includes(l)
   )
-  const fallbackLetter = availableLetters.includes(defaultDriveLetter)
-    ? defaultDriveLetter
-    : availableLetters[0] || defaultDriveLetter
+  const fallbackMountPoint = IS_MAC
+    ? defaultMountPoint
+    : availableLetters.includes(defaultMountPoint)
+      ? defaultMountPoint
+      : availableLetters[0] || defaultMountPoint
 
   const [url, setUrl] = useState(server?.url ?? defaultUrl)
-  const [driveLetter, setDriveLetter] = useState(server?.driveLetter ?? fallbackLetter)
+  const [mountPoint, setMountPoint] = useState(server?.mountPoint ?? fallbackMountPoint)
   const [driveName, setDriveName] = useState(server?.driveName ?? defaultDriveName)
   const [username, setUsername] = useState(server?.username ?? '')
   const [password, setPassword] = useState(server?.password ?? '')
@@ -59,7 +68,7 @@ export default function LoginDialog({
     onSubmit({
       id: server?.id,
       url,
-      driveLetter,
+      mountPoint,
       username,
       password,
       remember,
@@ -108,14 +117,30 @@ export default function LoginDialog({
           </div>
 
           <div className="login-field">
-            <label>Lettre de lecteur</label>
-            <select value={driveLetter} onChange={(e) => setDriveLetter(e.target.value)}>
-              {availableLetters.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
+            <label>{IS_MAC ? 'Point de montage' : 'Lettre de lecteur'}</label>
+            {IS_MAC ? (
+              <>
+                <input
+                  type="text"
+                  value={mountPoint}
+                  onChange={(e) => setMountPoint(e.target.value)}
+                  placeholder="/Volumes/NAS"
+                />
+                {mountPoint.trim() && !isValidMountPoint(mountPoint) && (
+                  <span className="login-field-hint">
+                    Le chemin doit commencer par /
+                  </span>
+                )}
+              </>
+            ) : (
+              <select value={mountPoint} onChange={(e) => setMountPoint(e.target.value)}>
+                {availableLetters.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="login-field">
@@ -159,7 +184,7 @@ export default function LoginDialog({
             <button
               type="submit"
               className="login-btn login-btn--connect"
-              disabled={!username || !password || !isValidUrl(url)}
+              disabled={!username || !password || !isValidUrl(url) || !isValidMountPoint(mountPoint)}
             >
               {isEdit ? 'Enregistrer' : 'Connecter'}
             </button>

@@ -1,7 +1,7 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, shell, Notification } from 'electron'
 import { join } from 'path'
 import { getDriveSpace } from './rclone-manager'
-import { existsSync } from 'fs'
+import { isMountReady, mountPathForOpen } from './platform'
 import type { ServerConfig } from './store'
 
 const ICON_SIZE = { width: 16, height: 16 }
@@ -87,7 +87,7 @@ export function createTray(
     const servers = getServers()
     const results = servers.map((s) => ({
       server: s,
-      connected: existsSync(s.driveLetter + '\\')
+      connected: isMountReady(s.mountPoint)
     }))
 
     // F2 + F3: Detect unexpected disconnections
@@ -97,7 +97,7 @@ export function createTray(
         // F3: Native notification
         new Notification({
           title: 'CMC Drive',
-          body: `${server.driveName} (${server.driveLetter}) déconnecté. Reconnexion...`
+          body: `${server.driveName} (${server.mountPoint}) déconnecté. Reconnexion...`
         }).show()
         // F2: Trigger reconnection callback
         options?.onDriveDisconnected?.(server.id)
@@ -133,14 +133,14 @@ export function createTray(
       for (const { server, connected } of results) {
         if (!connected) continue
         try {
-          const space = await getDriveSpace(server.driveLetter)
+          const space = await getDriveSpace(server.mountPoint)
           if (space) {
             const freeBytes = space.totalBytes - space.usedBytes
             if (freeBytes < LOW_SPACE_THRESHOLD_BYTES && !lowSpaceNotified.has(server.id)) {
               const freeGB = (freeBytes / 1024 ** 3).toFixed(1)
               new Notification({
                 title: 'CMC Drive — Espace disque faible',
-                body: `${server.driveName} (${server.driveLetter}) : ${freeGB} Go restants`
+                body: `${server.driveName} (${server.mountPoint}) : ${freeGB} Go restants`
               }).show()
               lowSpaceNotified.add(server.id)
             } else if (freeBytes >= LOW_SPACE_THRESHOLD_BYTES && lowSpaceNotified.has(server.id)) {
@@ -156,9 +156,9 @@ export function createTray(
     const connectedEntries = results
       .filter((r) => r.connected)
       .map((r) => ({
-        label: `Ouvrir ${r.server.driveName} (${r.server.driveLetter})`,
+        label: `Ouvrir ${r.server.driveName} (${r.server.mountPoint})`,
         click: (): void => {
-          shell.openPath(r.server.driveLetter + '\\')
+          shell.openPath(mountPathForOpen(r.server.mountPoint))
         }
       }))
 

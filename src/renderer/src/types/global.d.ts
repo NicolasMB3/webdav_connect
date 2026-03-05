@@ -10,11 +10,11 @@ declare global {
       closeWindow: () => void
       webdav: {
         connect: (opts: ConnectOptions) => Promise<void>
-        disconnect: (driveLetter: string) => Promise<void>
-        getSpace: (driveLetter: string) => Promise<DriveSpace | null>
-        isConnected: (driveLetter: string) => Promise<boolean>
-        openExplorer: (driveLetter: string) => void
-        rename: (driveLetter: string, name: string) => Promise<void>
+        disconnect: (mountPoint: string) => Promise<void>
+        getSpace: (mountPoint: string) => Promise<DriveSpace | null>
+        isConnected: (mountPoint: string) => Promise<boolean>
+        openExplorer: (mountPoint: string) => void
+        rename: (mountPoint: string, name: string) => Promise<void>
       }
       store: {
         loadAll: () => Promise<ServerConfig[]>

@@ -12,7 +12,8 @@ function migrateIfNeeded(): void {
     const old = store.get('connection') as
       | {
           url: string
-          driveLetter: string
+          driveLetter?: string
+          mountPoint?: string
           username: string
           password: string
           autoConnect: boolean
@@ -24,7 +25,7 @@ function migrateIfNeeded(): void {
         {
           id: Date.now().toString(),
           url: old.url,
-          driveLetter: old.driveLetter,
+          mountPoint: old.mountPoint || old.driveLetter || 'V:',
           username: old.username,
           password: old.password, // already encrypted
           autoConnect: old.autoConnect ?? false,
@@ -33,6 +34,20 @@ function migrateIfNeeded(): void {
       ])
       store.delete('connection')
     }
+  }
+
+  // v2 migration: rename driveLetter → mountPoint in each server entry
+  const servers = store.get('servers', []) as Record<string, unknown>[]
+  let migrated = false
+  for (const s of servers) {
+    if ('driveLetter' in s && !('mountPoint' in s)) {
+      s.mountPoint = s.driveLetter
+      delete s.driveLetter
+      migrated = true
+    }
+  }
+  if (migrated) {
+    store.set('servers', servers)
   }
 }
 

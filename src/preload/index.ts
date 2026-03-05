@@ -31,12 +31,12 @@ contextBridge.exposeInMainWorld('api', {
   closeWindow: () => ipcRenderer.send(IPC_WINDOW_CLOSE),
   webdav: {
     connect: (opts: ConnectOptions) => ipcRenderer.invoke(IPC_WEBDAV_CONNECT, opts),
-    disconnect: (driveLetter: string) => ipcRenderer.invoke(IPC_WEBDAV_DISCONNECT, driveLetter),
-    getSpace: (driveLetter: string) => ipcRenderer.invoke(IPC_WEBDAV_SPACE, driveLetter),
-    isConnected: (driveLetter: string) => ipcRenderer.invoke(IPC_WEBDAV_IS_CONNECTED, driveLetter),
-    openExplorer: (driveLetter: string) => ipcRenderer.send(IPC_WEBDAV_OPEN_EXPLORER, driveLetter),
-    rename: (driveLetter: string, name: string) =>
-      ipcRenderer.invoke(IPC_WEBDAV_RENAME, driveLetter, name)
+    disconnect: (mountPoint: string) => ipcRenderer.invoke(IPC_WEBDAV_DISCONNECT, mountPoint),
+    getSpace: (mountPoint: string) => ipcRenderer.invoke(IPC_WEBDAV_SPACE, mountPoint),
+    isConnected: (mountPoint: string) => ipcRenderer.invoke(IPC_WEBDAV_IS_CONNECTED, mountPoint),
+    openExplorer: (mountPoint: string) => ipcRenderer.send(IPC_WEBDAV_OPEN_EXPLORER, mountPoint),
+    rename: (mountPoint: string, name: string) =>
+      ipcRenderer.invoke(IPC_WEBDAV_RENAME, mountPoint, name)
   },
   store: {
     loadAll: () => ipcRenderer.invoke(IPC_STORE_LOAD_ALL),

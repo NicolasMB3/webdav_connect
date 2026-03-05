@@ -3,6 +3,7 @@ name: Build & Release
 on:
   release:
     types: [created]
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -36,9 +37,62 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: dist/*.exe
+
       - name: Upload assets to release
+        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           gh release upload "$env:RELEASE_TAG" dist/*.exe dist/latest.yml --clobber
+
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Download rclone (macOS universal)
+        run: |
+          curl -L -o rclone-arm64.zip "https://downloads.rclone.org/v1.69.3/rclone-v1.69.3-osx-arm64.zip"
+          curl -L -o rclone-amd64.zip "https://downloads.rclone.org/v1.69.3/rclone-v1.69.3-osx-amd64.zip"
+          unzip rclone-arm64.zip -d rclone-arm64-tmp
+          unzip rclone-amd64.zip -d rclone-amd64-tmp
+          lipo -create \
+            rclone-arm64-tmp/rclone-v1.69.3-osx-arm64/rclone \
+            rclone-amd64-tmp/rclone-v1.69.3-osx-amd64/rclone \
+            -output resources/rclone
+          chmod +x resources/rclone
+          rm -rf rclone-arm64.zip rclone-amd64.zip rclone-arm64-tmp rclone-amd64-tmp
+
+      - name: Build and package
+        run: npm run package:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: dist/*.dmg
+
+      - name: Upload assets to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" dist/*.dmg dist/latest-mac.yml --clobber

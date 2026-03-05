@@ -5,8 +5,9 @@ import DriveCard, { DriveStatus } from './components/DriveCard'
 import LoginDialog from './components/LoginDialog'
 import Settings from './components/Settings'
 
+const IS_MAC = window.api.platform === 'darwin'
 const DEFAULT_URL = 'https://stockage.cmc-06.fr:5006/backup'
-const DEFAULT_DRIVE = 'V:'
+const DEFAULT_MOUNT_POINT = IS_MAC ? '/Volumes/NAS-CMC-06' : 'V:'
 const DEFAULT_NAME = 'NAS CMC-06'
 
 interface ServerState {
@@ -31,9 +32,9 @@ function App(): React.JSX.Element {
   }, [])
 
   const refreshSpace = useCallback(
-    async (id: string, driveLetter: string) => {
+    async (id: string, mountPoint: string) => {
       try {
-        const space = await window.api.webdav.getSpace(driveLetter)
+        const space = await window.api.webdav.getSpace(mountPoint)
         if (space) {
           updateServer(id, { usedBytes: space.usedBytes, totalBytes: space.totalBytes })
         }
@@ -59,14 +60,14 @@ function App(): React.JSX.Element {
       // Check which drives are already connected
       for (const config of configs) {
         window.api.webdav
-          .isConnected(config.driveLetter)
+          .isConnected(config.mountPoint)
           .then((connected) => {
             if (connected) {
               setServers((prev) =>
                 prev.map((s) => (s.config.id === config.id ? { ...s, status: 'connected' } : s))
               )
               window.api.webdav
-                .getSpace(config.driveLetter)
+                .getSpace(config.mountPoint)
                 .then((space) => {
                   if (space) {
                     setServers((prev) =>
@@ -104,7 +105,7 @@ function App(): React.JSX.Element {
         // Fetch space outside setState updater
         const server = serversRef.current.find((s) => s.config.id === serverId)
         if (server) {
-          refreshSpace(server.config.id, server.config.driveLetter)
+          refreshSpace(server.config.id, server.config.mountPoint)
         }
       }
     })
@@ -117,7 +118,7 @@ function App(): React.JSX.Element {
       serversRef.current
         .filter((s) => s.status === 'connected')
         .forEach((s) => {
-          refreshSpace(s.config.id, s.config.driveLetter)
+          refreshSpace(s.config.id, s.config.mountPoint)
         })
     }, 30_000)
     return () => clearInterval(interval)
@@ -126,7 +127,7 @@ function App(): React.JSX.Element {
   const handleConnect = async (data: {
     id?: string
     url: string
-    driveLetter: string
+    mountPoint: string
     username: string
     password: string
     remember: boolean
@@ -139,7 +140,7 @@ function App(): React.JSX.Element {
     const config: ServerConfig = {
       id: serverId,
       url: data.url,
-      driveLetter: data.driveLetter,
+      mountPoint: data.mountPoint,
       username: data.username,
       password: data.password,
       autoConnect: data.autoConnect,
@@ -171,14 +172,14 @@ function App(): React.JSX.Element {
     try {
       await window.api.webdav.connect({
         url: data.url,
-        driveLetter: data.driveLetter,
+        mountPoint: data.mountPoint,
         username: data.username,
         password: data.password,
         driveName: data.driveName
       })
       updateServer(serverId, { status: 'connected', error: null })
-      refreshSpace(serverId, data.driveLetter)
-      window.api.notify('CMC Drive', `${data.driveName} connecté sur ${data.driveLetter}`)
+      refreshSpace(serverId, data.mountPoint)
+      window.api.notify('CMC Drive', `${data.driveName} connecté sur ${data.mountPoint}`)
 
       if (data.remember) {
         await window.api.store.save(config)
@@ -198,7 +199,7 @@ function App(): React.JSX.Element {
     updateServer(id, { status: 'disconnecting', error: null })
 
     try {
-      await window.api.webdav.disconnect(server.config.driveLetter)
+      await window.api.webdav.disconnect(server.config.mountPoint)
       updateServer(id, { status: 'disconnected', usedBytes: null, totalBytes: null })
       window.api.notify('CMC Drive', `${server.config.driveName} déconnecté`)
     } catch (err) {
@@ -215,7 +216,7 @@ function App(): React.JSX.Element {
 
     if (server.status === 'connected') {
       try {
-        await window.api.webdav.disconnect(server.config.driveLetter)
+        await window.api.webdav.disconnect(server.config.mountPoint)
       } catch {
         // Continue with deletion even if disconnect fails
       }
@@ -259,19 +260,19 @@ function App(): React.JSX.Element {
                 <DriveCard
                   name={server.config.driveName}
                   url={server.config.url}
-                  driveLetter={server.config.driveLetter}
+                  mountPoint={server.config.mountPoint}
                   status={server.status}
                   usedBytes={server.usedBytes}
                   totalBytes={server.totalBytes}
                   onConnect={() => handleEdit(server.config.id)}
                   onDisconnect={() => handleDisconnect(server.config.id)}
-                  onOpenExplorer={() => window.api.webdav.openExplorer(server.config.driveLetter)}
+                  onOpenExplorer={() => window.api.webdav.openExplorer(server.config.mountPoint)}
                   onDelete={() => handleDelete(server.config.id)}
                   onRename={async (newName) => {
                     const updatedConfig = { ...server.config, driveName: newName }
                     updateServer(server.config.id, { config: updatedConfig })
                     if (server.status === 'connected') {
-                      window.api.webdav.rename(server.config.driveLetter, newName).catch(() => {})
+                      window.api.webdav.rename(server.config.mountPoint, newName).catch(() => {})
                     }
                     await window.api.store.save(updatedConfig)
                   }}
@@ -296,9 +297,9 @@ function App(): React.JSX.Element {
         <LoginDialog
           server={loginTarget ?? undefined}
           defaultUrl={DEFAULT_URL}
-          defaultDriveLetter={DEFAULT_DRIVE}
+          defaultMountPoint={DEFAULT_MOUNT_POINT}
           defaultDriveName={DEFAULT_NAME}
-          usedDriveLetters={servers.map((s) => s.config.driveLetter)}
+          usedMountPoints={servers.map((s) => s.config.mountPoint)}
           onSubmit={handleConnect}
           onCancel={() => setShowLogin(false)}
         />

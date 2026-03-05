@@ -1,8 +1,6 @@
 import { app, BrowserWindow, ipcMain, Notification, shell, powerMonitor } from 'electron'
 import { join } from 'path'
-import { existsSync } from 'fs'
-import { execFile as execFileCb } from 'child_process'
-import { connectDrive, disconnectByDriveLetter, getDriveSpace, killAll } from './rclone-manager'
+import { connectDrive, disconnectByMountPoint, getDriveSpace, killAll } from './rclone-manager'
 import {
   loadServers,
   saveServer,
@@ -14,6 +12,7 @@ import {
 } from './store'
 import { createTray } from './tray'
 import { setupAutoUpdater, checkForUpdates, installUpdate, replayUpdateState } from './updater'
+import { getIconPath, isMountReady, mountPathForOpen, IS_WIN } from './platform'
 import {
   IPC_WINDOW_MINIMIZE,
   IPC_WINDOW_CLOSE,
@@ -34,13 +33,6 @@ import {
   IPC_UPDATER_INSTALL,
   IPC_NOTIFY
 } from '../shared/ipc-channels'
-
-function getIconPath(): string {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'resources', 'icon.ico')
-  }
-  return join(__dirname, '../../resources/icon.ico')
-}
 
 const RECONNECT_COOLDOWN_MS = 30_000
 
@@ -109,7 +101,7 @@ async function connectServer(server: ServerConfig): Promise<void> {
     server.id,
     {
       url: server.url,
-      driveLetter: server.driveLetter,
+      mountPoint: server.mountPoint,
       username: server.username,
       password: server.password,
       driveName: server.driveName
@@ -143,14 +135,14 @@ ipcMain.handle(
     _e,
     opts: {
       url: string
-      driveLetter: string
+      mountPoint: string
       username: string
       password: string
       driveName?: string
     }
   ) => {
     const servers = loadServers()
-    const server = servers.find((s) => s.driveLetter === opts.driveLetter)
+    const server = servers.find((s) => s.mountPoint === opts.mountPoint)
     const serverId = server?.id || Date.now().toString()
     if (server) intentionalDisconnects.delete(serverId)
 
@@ -162,27 +154,29 @@ ipcMain.handle(
   }
 )
 
-ipcMain.handle(IPC_WEBDAV_DISCONNECT, async (_e, driveLetter: string) => {
+ipcMain.handle(IPC_WEBDAV_DISCONNECT, async (_e, mountPoint: string) => {
   const servers = loadServers()
-  const server = servers.find((s) => s.driveLetter === driveLetter)
+  const server = servers.find((s) => s.mountPoint === mountPoint)
   if (server) intentionalDisconnects.add(server.id)
-  await disconnectByDriveLetter(driveLetter)
+  await disconnectByMountPoint(mountPoint)
 })
 
-ipcMain.handle(IPC_WEBDAV_SPACE, async (_e, driveLetter: string) => {
-  return getDriveSpace(driveLetter)
+ipcMain.handle(IPC_WEBDAV_SPACE, async (_e, mountPoint: string) => {
+  return getDriveSpace(mountPoint)
 })
 
-ipcMain.handle(IPC_WEBDAV_IS_CONNECTED, async (_e, driveLetter: string) => {
-  return existsSync(driveLetter + '\\')
+ipcMain.handle(IPC_WEBDAV_IS_CONNECTED, async (_e, mountPoint: string) => {
+  return isMountReady(mountPoint)
 })
 
-ipcMain.on(IPC_WEBDAV_OPEN_EXPLORER, (_e, driveLetter: string) => {
-  shell.openPath(driveLetter + '\\')
+ipcMain.on(IPC_WEBDAV_OPEN_EXPLORER, (_e, mountPoint: string) => {
+  shell.openPath(mountPathForOpen(mountPoint))
 })
 
-ipcMain.handle(IPC_WEBDAV_RENAME, async (_e, driveLetter: string, name: string) => {
-  const letter = driveLetter.replace(/[^A-Za-z]/g, '')
+ipcMain.handle(IPC_WEBDAV_RENAME, async (_e, mountPoint: string, name: string) => {
+  // Registry rename hack is Windows-only
+  if (!IS_WIN) return
+  const { execFile: execFileCb } = await import('child_process')
   const safeName = name.replace(/'/g, "''").replace(/[`$]/g, '')
   execFileCb(
     'powershell.exe',
@@ -240,7 +234,7 @@ async function reconnectServers(): Promise<void> {
   const now = Date.now()
   const servers = loadServers()
   const toReconnect = servers.filter((s) => {
-    if (!s.autoConnect || intentionalDisconnects.has(s.id) || existsSync(s.driveLetter + '\\')) {
+    if (!s.autoConnect || intentionalDisconnects.has(s.id) || isMountReady(s.mountPoint)) {
       return false
     }
     const lastAttempt = lastReconnectAttempts.get(s.id) ?? 0
@@ -272,7 +266,9 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     // Fix Windows taskbar icon: associate our custom icon with this AppUserModelId
-    app.setAppUserModelId('fr.cmc-06.cmc-drive')
+    if (IS_WIN) {
+      app.setAppUserModelId('fr.cmc-06.cmc-drive')
+    }
 
     // Enable auto-start on first launch
     if (isFirstLaunch()) {
@@ -296,7 +292,7 @@ if (!gotLock) {
     // Auto-connect on startup for all servers with autoConnect enabled
     const servers = loadServers()
     const autoConnectServers = servers.filter(
-      (s) => s.autoConnect && !existsSync(s.driveLetter + '\\')
+      (s) => s.autoConnect && !isMountReady(s.mountPoint)
     )
 
     if (autoConnectServers.length > 0) {

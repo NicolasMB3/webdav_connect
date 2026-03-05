@@ -7,6 +7,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder --win",
+    "package:mac": "electron-vite build && electron-builder --mac",
+    "package:all": "electron-vite build && electron-builder --win --mac",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{json,mjs}\"",
@@ -15,7 +17,7 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "description": "CMC Drive - WebDAV client for Windows",
+  "description": "CMC Drive - WebDAV client",
   "devDependencies": {
     "@eslint/js": "^9.39.3",
     "@types/node": "^25.3.3",
@@ -62,6 +64,24 @@
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
       "include": "build/installer.nsh"
+    },
+    "mac": {
+      "target": {
+        "target": "dmg",
+        "arch": ["universal"]
+      },
+      "icon": "build/icon.icns",
+      "category": "public.app-category.utilities",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     },
     "afterPack": "./scripts/afterPack.cjs",
     "publish": {

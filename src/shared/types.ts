@@ -1,7 +1,7 @@
 export interface ServerConfig {
   id: string
   url: string
-  driveLetter: string
+  mountPoint: string
   username: string
   password: string
   autoConnect: boolean
@@ -10,7 +10,7 @@ export interface ServerConfig {
 
 export interface ConnectOptions {
   url: string
-  driveLetter: string
+  mountPoint: string
   username: string
   password: string
   driveName?: string

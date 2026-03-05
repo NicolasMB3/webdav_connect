@@ -65,7 +65,7 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
       <div className="settings-section">
         <h3>Démarrage</h3>
         <label className="settings-toggle">
-          <span>Lancer CMC Drive au démarrage de Windows</span>
+          <span>Lancer CMC Drive au démarrage</span>
           <input
             type="checkbox"
             checked={autoStart}

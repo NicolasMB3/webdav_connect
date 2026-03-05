@@ -3,10 +3,12 @@ import './DriveCard.css'
 
 export type DriveStatus = 'connected' | 'disconnected' | 'connecting' | 'disconnecting'
 
+const IS_MAC = window.api.platform === 'darwin'
+
 interface DriveCardProps {
   name: string
   url: string
-  driveLetter: string
+  mountPoint: string
   status: DriveStatus
   usedBytes: number | null
   totalBytes: number | null
@@ -24,11 +26,19 @@ function formatSize(bytes: number): string {
   return (bytes / 1e3).toFixed(2) + ' Ko'
 }
 
+function displayMountPoint(mp: string): string {
+  if (IS_MAC) {
+    const segments = mp.split('/')
+    return segments[segments.length - 1] || mp
+  }
+  return mp
+}
+
 export default function DriveCard(props: DriveCardProps): React.JSX.Element {
   const {
     name,
     url,
-    driveLetter,
+    mountPoint,
     status,
     usedBytes,
     totalBytes,
@@ -72,6 +82,8 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
       onRename(trimmed)
     }
   }
+
+  const openLabel = IS_MAC ? 'Ouvrir dans le Finder' : "Ouvrir dans l'Explorateur"
 
   return (
     <div className={`drive-card ${isConnected ? 'drive-card--connected' : ''}`}>
@@ -131,7 +143,7 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
               )}
             </>
           )}
-          <span className="drive-card-letter">({driveLetter})</span>
+          <span className="drive-card-letter">({displayMountPoint(mountPoint)})</span>
           <span className={`drive-card-status drive-card-status--${status}`}>
             {status === 'connected' && '\u25CF'}
             {status === 'disconnected' && '\u25CB'}
@@ -162,8 +174,8 @@ export default function DriveCard(props: DriveCardProps): React.JSX.Element {
             <button
               className="drive-action-btn"
               onClick={onOpenExplorer}
-              title="Ouvrir dans l'Explorateur"
-              aria-label="Ouvrir dans l'Explorateur"
+              title={openLabel}
+              aria-label={openLabel}
             >
               <svg
                 aria-hidden="true"
