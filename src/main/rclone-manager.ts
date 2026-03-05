@@ -4,7 +4,7 @@ import { readFileSync } from 'fs'
 import { app } from 'electron'
 import http from 'http'
 import type { ConnectOptions, DriveSpace } from '../shared/types'
-import { getRclonePath, isMountReady, IS_WIN, IS_MAC, checkFuseAvailable } from './platform'
+import { getRclonePath, isMountReady, IS_WIN, IS_MAC } from './platform'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -173,9 +173,6 @@ export async function connectDrive(
   opts: ConnectOptions,
   onExit?: (code: number | null) => void
 ): Promise<void> {
-  // Check FUSE availability on macOS
-  await checkFuseAvailable()
-
   // If already mounted, disconnect first
   if (mounts.has(serverId)) {
     await disconnectDrive(serverId)
@@ -191,8 +188,11 @@ export async function connectDrive(
   // On-the-fly remote: :webdav,url="...",user="...",pass="...": MOUNT_POINT
   const remoteSpec = `:webdav,url="${opts.url}",user="${opts.username}",pass="${obscured}":`
 
+  // Use nfsmount on macOS (no FUSE dependency), regular mount on Windows
+  const mountCmd = IS_MAC ? 'nfsmount' : 'mount'
+
   const args = [
-    'mount',
+    mountCmd,
     remoteSpec,
     opts.mountPoint,
     '--vfs-cache-mode',
@@ -207,8 +207,6 @@ export async function connectDrive(
     '5m',
     '--attr-timeout',
     '1s',
-    '--volname',
-    volname,
     '--rc',
     '--rc-addr',
     `127.0.0.1:${rcPort}`,
@@ -219,8 +217,9 @@ export async function connectDrive(
     'INFO'
   ]
 
-  // Windows-only flags
+  // Windows-only flags (FUSE-based mount)
   if (IS_WIN) {
+    args.push('--volname', volname)
     args.push('--vfs-case-insensitive')
     args.push('--network-mode')
   }
