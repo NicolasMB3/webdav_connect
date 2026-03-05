@@ -1,4 +1,5 @@
 import { autoUpdater } from 'electron-updater'
+import { shell } from 'electron'
 import type { BrowserWindow } from 'electron'
 import {
   IPC_UPDATER_UPDATE_AVAILABLE,
@@ -6,6 +7,9 @@ import {
   IPC_UPDATER_UP_TO_DATE,
   IPC_UPDATER_ERROR
 } from '../shared/ipc-channels'
+import { IS_MAC } from './platform'
+
+const GITHUB_RELEASES_URL = 'https://github.com/NicolasMB3/webdav_connect/releases/latest'
 
 const INITIAL_CHECK_DELAY_MS = 5_000
 const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1_000
@@ -38,7 +42,8 @@ export function replayUpdateState(win: BrowserWindow): void {
 
 export function setupAutoUpdater(getWindow: () => BrowserWindow | null): void {
   getWindowFn = getWindow
-  autoUpdater.autoDownload = true
+  // On macOS the app is unsigned, so auto-download would fail signature verification
+  autoUpdater.autoDownload = !IS_MAC
   autoUpdater.autoInstallOnAppQuit = false
 
   autoUpdater.on('checking-for-update', () => {})
@@ -77,5 +82,9 @@ export function checkForUpdates(): void {
 }
 
 export function installUpdate(): void {
-  autoUpdater.quitAndInstall()
+  if (IS_MAC) {
+    shell.openExternal(GITHUB_RELEASES_URL)
+  } else {
+    autoUpdater.quitAndInstall()
+  }
 }

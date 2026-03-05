@@ -88,9 +88,12 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
         <h3>Mises à jour</h3>
         <button
           className="settings-update-btn"
-          disabled={updateStatus === 'checking' || updateStatus === 'available'}
+          disabled={
+            updateStatus === 'checking' ||
+            (updateStatus === 'available' && window.api.platform !== 'darwin')
+          }
           onClick={() => {
-            if (updateStatus === 'downloaded') {
+            if (updateStatus === 'downloaded' || (updateStatus === 'available' && window.api.platform === 'darwin')) {
               window.api.updater.install()
             } else {
               setUpdateStatus('checking')
@@ -101,7 +104,9 @@ export default function Settings({ onBack }: SettingsProps): React.JSX.Element {
           {updateStatus === 'checking'
             ? 'Vérification...'
             : updateStatus === 'available'
-              ? 'Téléchargement en cours...'
+              ? window.api.platform === 'darwin'
+                ? 'Mise à jour disponible — Télécharger'
+                : 'Téléchargement en cours...'
               : updateStatus === 'downloaded'
                 ? 'Mise à jour prête — Redémarrer'
                 : updateStatus === 'upToDate'
