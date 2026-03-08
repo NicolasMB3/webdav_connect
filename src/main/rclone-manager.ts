@@ -261,6 +261,19 @@ export async function connectDrive(
  * macOS: mount WebDAV natively via osascript (no FUSE/NFS/rclone needed).
  */
 async function connectDriveMac(serverId: string, opts: ConnectOptions): Promise<void> {
+  // Prevent Finder from creating .DS_Store files on network volumes
+  try {
+    execFileSync('defaults', [
+      'write',
+      'com.apple.desktopservices',
+      'DSDontWriteNetworkStores',
+      '-bool',
+      'true'
+    ])
+  } catch {
+    // Non-critical — continue even if this fails
+  }
+
   const actualMount = await mountNativeWebDav(opts.url, opts.username, opts.password)
 
   mounts.set(serverId, {
@@ -288,7 +301,8 @@ async function connectDriveWindows(
 
   const rcPort = allocatePort()
   const logPath = join(getLogDir(), `rclone-${serverId}.log`)
-  const volname = opts.driveName || DEFAULT_VOLNAME
+  const baseName = opts.driveName || DEFAULT_VOLNAME
+  const volname = IS_WIN ? `${baseName} (${opts.mountPoint})` : baseName
 
   const remoteSpec = `:webdav,url="${opts.url}",user="${opts.username}",pass="${obscured}":`
 
