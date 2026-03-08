@@ -1,6 +1,6 @@
 {
   "name": "cmc-drive",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -66,10 +66,10 @@
       "include": "build/installer.nsh"
     },
     "mac": {
-      "target": {
-        "target": "dmg",
-        "arch": ["universal"]
-      },
+      "target": [
+        { "target": "dmg", "arch": ["universal"] },
+        { "target": "zip", "arch": ["universal"] }
+      ],
       "icon": "build/icon.png",
       "category": "public.app-category.utilities",
       "entitlements": "build/entitlements.mac.plist",

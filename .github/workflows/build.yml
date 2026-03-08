@@ -87,7 +87,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/*.zip
 
       - name: Upload assets to release
         if: github.event_name == 'release'
@@ -95,4 +97,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh release upload "$RELEASE_TAG" dist/*.dmg dist/latest-mac.yml --clobber
+          gh release upload "$RELEASE_TAG" dist/*.dmg dist/*.zip dist/latest-mac.yml --clobber
