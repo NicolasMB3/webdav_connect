@@ -7,6 +7,48 @@ import type { ConnectOptions, DriveSpace } from '../shared/types'
 import { getRclonePath, isMountReady, IS_WIN, IS_MAC } from './platform'
 
 // ---------------------------------------------------------------------------
+// Orphaned rclone cleanup (survives app restart)
+// ---------------------------------------------------------------------------
+
+/**
+ * Kill any rclone processes left over from a previous app session and remove
+ * stale WinFsp network connections. Must be called BEFORE auto-connect.
+ */
+export function killOrphanedRclone(): void {
+  if (!IS_WIN) return
+
+  const rcloneBin = getRclonePath()
+
+  // Kill rclone.exe processes spawned from our install path
+  try {
+    const out = execFileSync('powershell.exe', [
+      '-WindowStyle', 'Hidden', '-NoProfile', '-Command',
+      `Get-Process rclone -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${rcloneBin.replace(/\\/g, '\\\\')}' } | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }`
+    ], { encoding: 'utf8', windowsHide: true, timeout: 10_000 })
+    if (out.trim()) console.warn('[rclone] orphan cleanup:', out.trim())
+  } catch {
+    // No rclone processes running — expected
+  }
+
+  // Remove stale WinFsp network connections (from --network-mode mounts)
+  try {
+    const netUse = execFileSync('net', ['use'], { encoding: 'utf8', windowsHide: true, timeout: 5_000 })
+    for (const line of netUse.split('\n')) {
+      const match = line.match(/^\s*\S*\s+([A-Z]:)\s+\\\\server\\/i)
+      if (match) {
+        try {
+          execFileSync('net', ['use', match[1], '/delete', '/yes'], { windowsHide: true, timeout: 5_000 })
+        } catch {
+          // May already be gone
+        }
+      }
+    }
+  } catch {
+    // net use may fail if no connections
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -332,8 +374,7 @@ async function connectDriveWindows(
     logPath,
     '--log-level',
     'INFO',
-    '--vfs-case-insensitive',
-    '--network-mode'
+    '--vfs-case-insensitive'
   ]
 
   const proc = spawn(getRclonePath(), args, {
@@ -405,11 +446,11 @@ async function disconnectDrive(serverId: string): Promise<void> {
     return
   }
 
-  // rclone-based mount (Windows) — RC API then kill
+  // rclone-based mount (Windows) — clean unmount via RC API, then kill
   try {
     await rcPost(entry.rcPort, 'mount/unmount', { mountPoint: entry.mountPoint })
   } catch {
-    // RC API may already be down
+    // RC API may not track the mount (e.g. legacy --network-mode)
   }
 
   try {
@@ -418,7 +459,7 @@ async function disconnectDrive(serverId: string): Promise<void> {
     // RC API may already be down
   }
 
-  await sleep(500)
+  await sleep(1_000)
 
   try {
     if (!entry.proc.killed) {
@@ -426,6 +467,18 @@ async function disconnectDrive(serverId: string): Promise<void> {
     }
   } catch {
     // Already dead
+  }
+
+  // Clean up any residual WinFsp network connection (legacy --network-mode mounts)
+  if (IS_WIN) {
+    try {
+      execFileSync('net', ['use', entry.mountPoint, '/delete', '/yes'], {
+        windowsHide: true,
+        timeout: 5_000
+      })
+    } catch {
+      // No stale connection — expected for non-network-mode mounts
+    }
   }
 
   mounts.delete(serverId)
@@ -491,7 +544,13 @@ export async function getDriveSpace(mountPoint: string): Promise<DriveSpace | nu
       )
       const data = JSON.parse(result.trim())
       if (data.Used != null && data.Free != null) {
-        return { usedBytes: data.Used, totalBytes: data.Used + data.Free }
+        const totalBytes = data.Used + data.Free
+        const MAX_REALISTIC_BYTES = 500 * 1024 ** 4 // 500 TB
+        if (totalBytes > MAX_REALISTIC_BYTES) {
+          // WinFsp returns unrealistic size when WebDAV has no quota info
+          return null
+        }
+        return { usedBytes: data.Used, totalBytes }
       }
       return null
     } catch {

@@ -5,6 +5,7 @@ import {
   disconnectByMountPoint,
   getDriveSpace,
   killAll,
+  killOrphanedRclone,
   resolveMount
 } from './rclone-manager'
 import {
@@ -275,6 +276,9 @@ if (!gotLock) {
     if (IS_WIN) {
       app.setAppUserModelId('fr.cmc-06.cmc-drive')
     }
+
+    // Kill rclone processes left over from a previous session before reconnecting
+    killOrphanedRclone()
 
     // Enable auto-start on first launch
     if (isFirstLaunch()) {
